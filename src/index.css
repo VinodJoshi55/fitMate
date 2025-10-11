@@ -1,0 +1,13 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gradient-to-br from-indigo-500 to-purple-700 text-white font-sans min-h-screen overflow-x-hidden;
+}
+
+/* Custom class for the gradient text in the header */
+.text-gradient {
+  @apply bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent;
+}
