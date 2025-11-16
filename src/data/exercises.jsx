@@ -1,0 +1,75 @@
+import React from "react";
+import { Activity, Target, Zap } from "lucide-react";
+
+export const exercises = [
+  {
+    id: "squats",
+    name: "Squats",
+    icon: <Target className="w-6 h-6" />,
+    description: "Strengthen your legs and glutes",
+    difficulty: "Beginner",
+    caloriesPerRep: 0.32,
+    debounceTime: 500,
+    instructions: [
+      "Keep your chest up and back straight.",
+      "Lower your hips until thighs are parallel to the floor.",
+      "Push through your heels to return to the start.",
+    ],
+  },
+  {
+    id: "pushups",
+    name: "Push-ups",
+    icon: <Activity className="w-6 h-6" />,
+    description: "Build upper body strength",
+    difficulty: "Intermediate",
+    caloriesPerRep: 0.3,
+    debounceTime: 500,
+    instructions: [
+      "Keep your body in a straight line from head to heels.",
+      "Lower your chest towards the floor, elbows at 45 degrees.",
+      "Push back up, fully extending your arms.",
+    ],
+  },
+  {
+    id: "jumpingjacks",
+    name: "Jumping Jacks",
+    icon: <Zap className="w-6 h-6" />,
+    description: "Full body cardio workout",
+    difficulty: "Beginner",
+    caloriesPerRep: 0.2,
+    debounceTime: 300,
+    instructions: [
+      "Start with feet together and arms at your sides.",
+      "Jump, spreading feet wide while raising arms overhead.",
+      "Jump back to the starting position.",
+    ],
+  },
+  {
+    id: "bicepcurls",
+    name: "Bicep Curls",
+    icon: <Activity className="w-6 h-6" />,
+    description: "Tone your arms",
+    difficulty: "Beginner",
+    caloriesPerRep: 0.15,
+    debounceTime: 400,
+    instructions: [
+      "Keep your elbows locked at your sides.",
+      "Curl the weight up to your shoulders without swinging.",
+      "Lower the weight back down with control.",
+    ],
+  },
+  {
+    id: "highknees",
+    name: "High Knees",
+    icon: <Zap className="w-6 h-6" />,
+    description: "Boost your heart rate",
+    difficulty: "Intermediate",
+    caloriesPerRep: 0.25,
+    debounceTime: 200,
+    instructions: [
+      "Run in place, bringing your knees up to hip height.",
+      "Keep your core engaged and chest up.",
+      "Move at a quick, consistent pace.",
+    ],
+  },
+];
