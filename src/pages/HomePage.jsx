@@ -1,9 +1,14 @@
 import React from "react";
-import { Activity, User } from "lucide-react";
+import { Activity, LogOut, BookOpen } from "lucide-react";
 import Button from "../components/Button";
 import { exercises } from "../data/exercises";
 
-export default function HomePage({ onStartWorkout, isLoading }) {
+export default function HomePage({
+  onStartWorkout,
+  isLoading,
+  onLogout,
+  onShowHistory,
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3 sm:p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
@@ -16,10 +21,27 @@ export default function HomePage({ onStartWorkout, isLoading }) {
               FitMate
             </h1>
           </div>
-          <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-            <User className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline ml-2">Settings</span>
-          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
+              onClick={onShowHistory}
+            >
+              <BookOpen className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-2">History</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
+              onClick={onLogout}
+            >
+              <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-2">Logout</span>
+            </Button>
+          </div>
         </header>
 
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 relative overflow-hidden">

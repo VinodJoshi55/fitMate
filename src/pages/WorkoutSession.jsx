@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Play,
-  Pause, // --- ADDED ---
+  Pause,
   Square,
   Camera,
   RotateCcw,
@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/Card";
 import Badge from "../components/Badge";
 import LoadingSpinner from "../components/LoadingSpinner";
 
-export default function WorkoutSession({ exerciseId, onBack }) {
+export default function WorkoutSession({ exerciseId, onBack, token }) {
   const exercise = exercises.find((e) => e.id === exerciseId);
 
   const [isReady, setIsReady] = useState(false);
@@ -274,7 +274,7 @@ export default function WorkoutSession({ exerciseId, onBack }) {
         .then(() => {
           if (isMountedRef.current) {
             setIsReady(true);
-            setFeedbackMessage('Ready! Press "Play" to begin.'); // --- UPDATED ---
+            setFeedbackMessage('Ready! Press "Play" to begin.');
           }
         })
         .catch((err) => {
@@ -305,7 +305,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
     };
   }, [exerciseId, incrementRep]);
 
-  // --- ADDED ---
   const handlePlayPause = () => {
     if (!isReady) return;
     setIsActive((prev) => {
@@ -318,13 +317,54 @@ export default function WorkoutSession({ exerciseId, onBack }) {
     });
   };
 
-  // --- REMOVED handleStart and handleStop ---
-
   const handleReset = () => {
     setIsActive(false);
     setStats({ repCount: 0, caloriesBurned: 0, workoutTime: "00:00" });
     exerciseStateRef.current = getInitialState(exerciseId);
     setFeedbackMessage("Stats reset. Ready to go again!");
+  };
+
+  const handleEndSession = async () => {
+    // 1. Pause the workout if it's active
+    setIsActive(false);
+
+    // 2. Check if there's data to save
+    if (stats.repCount > 0) {
+      console.log("Saving workout data...", stats);
+      try {
+        const response = await fetch("http://localhost:3001/api/workouts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`, // Add the token here
+          },
+          body: JSON.stringify({
+            exerciseName: exercise.name,
+            repCount: stats.repCount,
+            caloriesBurned: Math.round(stats.caloriesBurned),
+            workoutTime: stats.workoutTime,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            alert("Your session has expired. Please log in again.");
+            window.location.reload(); // Force a reload to go back to login
+          }
+          throw new Error(result.message || "Failed to save workout");
+        }
+
+        console.log(result.message);
+      } catch (error) {
+        console.error("Error saving workout:", error);
+        alert("Could not save your workout. Please check your connection.");
+      }
+    }
+
+    // 3. Finally, call the original onBack function to go home
+    onBack();
   };
 
   return (
@@ -333,7 +373,7 @@ export default function WorkoutSession({ exerciseId, onBack }) {
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <Button
             variant="outline"
-            onClick={onBack}
+            onClick={handleEndSession} // Changed from onBack
             size="sm"
             className="text-xs sm:text-sm"
           >
@@ -373,7 +413,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
                     className="absolute inset-0 w-full h-full transform scale-x-[-1]"
                   />
 
-                  {/* --- ADDED CONTROLS --- */}
                   <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex gap-2">
                     <button
                       onClick={handlePlayPause}
@@ -393,7 +432,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
                       <Square className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </div>
-                  {/* --- END OF ADDED CONTROLS --- */}
 
                   <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4">
                     <div
@@ -454,7 +492,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
               </CardContent>
             </Card>
 
-            {/* --- ADDED INSTRUCTIONS CARD --- */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base sm:text-lg">
@@ -469,7 +506,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
                 </ul>
               </CardContent>
             </Card>
-            {/* --- END OF INSTRUCTIONS CARD --- */}
 
             <Card>
               <CardHeader>
@@ -478,8 +514,6 @@ export default function WorkoutSession({ exerciseId, onBack }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 sm:space-y-3">
-                {/* --- REMOVED START/STOP BUTTONS --- */}
-
                 <Button
                   variant="outline"
                   className="w-full text-xs sm:text-sm"
@@ -490,7 +524,7 @@ export default function WorkoutSession({ exerciseId, onBack }) {
                 <Button
                   variant="outline"
                   className="w-full text-xs sm:text-sm"
-                  onClick={onBack}
+                  onClick={handleEndSession} // Changed from onBack
                 >
                   <Camera className="w-3 h-3 sm:w-4 sm:h-4" /> End Session
                 </Button>
