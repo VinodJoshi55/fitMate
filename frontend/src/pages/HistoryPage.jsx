@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { Calendar, Repeat, Zap, Flame } from "lucide-react";
 
-// Helper function to format the date
+
 function formatDate(dateString) {
   const options = {
     year: "numeric",
@@ -50,7 +50,7 @@ export default function HistoryPage({ token, onBack }) {
     };
 
     fetchWorkouts();
-  }, [token]); // Re-fetch if token changes (though it shouldn't here)
+  }, [token]); 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3 sm:p-4 md:p-6">

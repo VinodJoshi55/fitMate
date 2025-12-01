@@ -18,8 +18,10 @@ import LoadingSpinner from "../components/LoadingSpinner";
 export default function WorkoutSession({ exerciseId, onBack, token }) {
   const exercise = exercises.find((e) => e.id === exerciseId);
 
+
   const [isReady, setIsReady] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [countDown, setCountDown] = useState(0); // --- NEW: Countdown State
   const [stats, setStats] = useState({
     repCount: 0,
     caloriesBurned: 0,
@@ -30,22 +32,38 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   );
   const [postureStatus, setPostureStatus] = useState("good");
 
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
   const poseRef = useRef(null);
   const workoutIntervalRef = useRef(null);
+  const lastRepTimeRef = useRef(0);
 
   const getInitialState = (id) =>
     id === "squats" || id === "pushups" ? "up" : "down";
   const exerciseStateRef = useRef(getInitialState(exerciseId));
 
-  const lastRepTimeRef = useRef(0);
-  const isMountedRef = useRef(true);
-
   const isActiveRef = useRef(isActive);
   isActiveRef.current = isActive;
 
+ 
+  useEffect(() => {
+    let timer;
+    if (countDown > 0) {
+      setFeedbackMessage(`Get in position... ${countDown}`);
+      timer = setTimeout(() => {
+        setCountDown((prev) => prev - 1);
+      }, 1000);
+    } else if (countDown === 0 && feedbackMessage.includes("Get in position")) {
+      // Countdown finished -> Start the actual workout
+      setIsActive(true);
+      setFeedbackMessage("Go!");
+    }
+    return () => clearTimeout(timer);
+  }, [countDown, feedbackMessage]);
+
+  
   const incrementRep = useCallback(() => {
     const now = Date.now();
     const debounceTime = exercise.debounceTime || 300;
@@ -78,7 +96,6 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     }
 
     workoutIntervalRef.current = setInterval(() => {
-      if (!isMountedRef.current) return;
       const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
       const minutes = Math.floor(elapsedSeconds / 60)
         .toString()
@@ -94,8 +111,9 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     };
   }, [isActive, stats.workoutTime]);
 
+  
   useEffect(() => {
-    isMountedRef.current = true;
+    let isMounted = true;
     let pose = null;
     let camera = null;
 
@@ -114,12 +132,14 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
       pose.setOptions({
         modelComplexity: 1,
         smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
 
       pose.onResults((results) => {
-        if (!canvasRef.current || !videoRef.current || !isMountedRef.current)
+        if (!isMounted || !canvasRef.current || !videoRef.current || !pose)
           return;
 
         const canvasCtx = canvasRef.current.getContext("2d");
@@ -148,6 +168,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
             radius: 4,
           });
 
+          // Only run logic if Active AND not in Countdown
           if (isActiveRef.current) {
             const landmarks = results.poseLandmarks;
             try {
@@ -179,69 +200,109 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                     landmarks[25],
                     landmarks[27]
                   );
-                  if (angle > 160 && exerciseStateRef.current === "down") {
+                  if (angle > 170 && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
                     incrementRep();
                     setFeedbackMessage("Good rep! Ready for the next.");
-                  } else if (angle < 100 && exerciseStateRef.current === "up") {
+                  } else if (angle < 90 && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
                     setFeedbackMessage("Lower your hips, keep back straight.");
                   }
                   break;
                 }
                 case "pushups": {
-                  if (!checkVisibility(landmarks, [12, 14, 16])) break;
-                  const angle = calculateAngle(
+                  if (!checkVisibility(landmarks, [11, 12, 13, 14, 15, 16]))
+                    break;
+
+                  const leftShoulder = landmarks[11];
+                  const rightShoulder = landmarks[12];
+                  const leftWrist = landmarks[15];
+                  const rightWrist = landmarks[16];
+
+                  const shoulderWidth = Math.abs(
+                    leftShoulder.x - rightShoulder.x
+                  );
+                  const torsoHeight = Math.abs(
+                    leftShoulder.y - landmarks[23].y
+                  );
+                  if (shoulderWidth < 0.1 && torsoHeight < 0.1) break;
+                  const noseY = landmarks[0].y;
+                  if (leftWrist.y < noseY || rightWrist.y < noseY) break;
+
+                  if (
+                    leftWrist.y < leftShoulder.y + 0.1 ||
+                    rightWrist.y < rightShoulder.y + 0.1
+                  )
+                    break;
+
+                 
+                  const leftElbowAngle = calculateAngle(
+                    landmarks[11],
+                    landmarks[13],
+                    landmarks[15]
+                  );
+                  const rightElbowAngle = calculateAngle(
                     landmarks[12],
                     landmarks[14],
                     landmarks[16]
                   );
-                  if (angle > 160 && exerciseStateRef.current === "down") {
+                  const avgAngle = (leftElbowAngle + rightElbowAngle) / 2;
+
+                  if (avgAngle > 165 && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
                     incrementRep();
                     setFeedbackMessage("Excellent push-up!");
-                  } else if (angle < 100 && exerciseStateRef.current === "up") {
+                  } else if (
+                    avgAngle < 90 &&
+                    exerciseStateRef.current === "up"
+                  ) {
                     exerciseStateRef.current = "down";
-                    setFeedbackMessage("Lower chest to the floor.");
+                    setFeedbackMessage("Push back up!");
                   }
                   break;
                 }
                 case "jumpingjacks": {
-                  if (!checkVisibility(landmarks, [11, 12, 15, 16, 23, 24]))
+                  if (!checkVisibility(landmarks, [11, 12, 23, 24, 15, 16, 0]))
                     break;
-                  const handsUp =
-                    landmarks[15].y < landmarks[11].y &&
-                    landmarks[16].y < landmarks[12].y;
+                  const leftWristY = landmarks[15].y;
+                  const rightWristY = landmarks[16].y;
+                  const noseY = landmarks[0].y;
+                  const leftHipY = landmarks[23].y;
+                  const rightHipY = landmarks[24].y;
+
+                  const handsUp = leftWristY < noseY && rightWristY < noseY;
                   const handsDown =
-                    landmarks[15].y > landmarks[23].y &&
-                    landmarks[16].y > landmarks[24].y;
+                    leftWristY > leftHipY && rightWristY > rightHipY;
+
                   if (handsUp && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
-                    incrementRep();
-                    setFeedbackMessage("Nice!");
+                    setFeedbackMessage("Great!");
                   } else if (handsDown && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
-                    setFeedbackMessage("Jump with energy!");
+                    incrementRep();
+                    setFeedbackMessage("Jump!");
                   }
                   break;
                 }
                 case "highknees": {
                   if (!checkVisibility(landmarks, [23, 24, 25, 26])) break;
                   const avgHipY = (landmarks[23].y + landmarks[24].y) / 2;
-                  const leftKneeUp = landmarks[25].y < avgHipY - 0.1;
-                  const rightKneeUp = landmarks[26].y < avgHipY - 0.1;
+                  const leftKneeY = landmarks[25].y;
+                  const rightKneeY = landmarks[26].y;
+
+                  const isLeftHigh = leftKneeY < avgHipY - 0.05;
+                  const isRightHigh = rightKneeY < avgHipY - 0.05;
+                  const areBothLow =
+                    leftKneeY > avgHipY && rightKneeY > avgHipY;
+
                   if (
-                    (leftKneeUp || rightKneeUp) &&
+                    (isLeftHigh || isRightHigh) &&
                     exerciseStateRef.current === "down"
                   ) {
                     exerciseStateRef.current = "up";
                     incrementRep();
-                    setFeedbackMessage("Keep it up!");
-                  } else if (
-                    !leftKneeUp &&
-                    !rightKneeUp &&
-                    exerciseStateRef.current === "up"
-                  ) {
+                    setFeedbackMessage("Keep going!");
+                  } else if (areBothLow && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
                   }
                   break;
@@ -255,42 +316,36 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
         canvasCtx.restore();
       });
 
-      camera = new window.Camera(videoRef.current, {
-        onFrame: async () => {
-          if (videoRef.current && videoRef.current.readyState >= 3) {
+      if (videoRef.current) {
+        camera = new window.Camera(videoRef.current, {
+          onFrame: async () => {
+            if (!isMounted || !pose || !videoRef.current) return;
             try {
               await pose.send({ image: videoRef.current });
-            } catch (error) {
-              /* Ignore errors during cleanup */
-            }
-          }
-        },
-        width: 640,
-        height: 360,
-      });
-      cameraRef.current = camera;
-      camera
-        .start()
-        .then(() => {
-          if (isMountedRef.current) {
+            } catch (error) {}
+          },
+          width: 640,
+          height: 360,
+        });
+        cameraRef.current = camera;
+
+        try {
+          await camera.start();
+          if (isMounted) {
             setIsReady(true);
             setFeedbackMessage('Ready! Press "Play" to begin.');
           }
-        })
-        .catch((err) => {
+        } catch (err) {
           console.error("Failed to start camera", err);
-          if (isMountedRef.current) {
-            alert(
-              "Failed to start camera. Please grant permissions and ensure it's not in use by another app."
-            );
-          }
-        });
+        }
+      }
     };
 
     initialize();
 
     return () => {
-      isMountedRef.current = false;
+      isMounted = false;
+      if (workoutIntervalRef.current) clearInterval(workoutIntervalRef.current);
       if (cameraRef.current) {
         cameraRef.current.stop();
         cameraRef.current = null;
@@ -299,44 +354,43 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
         poseRef.current.close();
         poseRef.current = null;
       }
-      if (workoutIntervalRef.current) {
-        clearInterval(workoutIntervalRef.current);
-      }
     };
   }, [exerciseId, incrementRep]);
 
+  // --- Updated Play Handler ---
   const handlePlayPause = () => {
     if (!isReady) return;
-    setIsActive((prev) => {
-      if (prev) {
-        setFeedbackMessage("Workout paused.");
-      } else {
-        setFeedbackMessage("Workout started! Let's go!");
-      }
-      return !prev;
-    });
+
+    if (isActive) {
+      // Pause immediately
+      setIsActive(false);
+      setCountDown(0); // Clear any active countdown
+      setFeedbackMessage("Workout paused.");
+    } else {
+      // Start Countdown (Logic handled in useEffect)
+      setCountDown(5);
+    }
   };
 
   const handleReset = () => {
     setIsActive(false);
+    setCountDown(0);
     setStats({ repCount: 0, caloriesBurned: 0, workoutTime: "00:00" });
     exerciseStateRef.current = getInitialState(exerciseId);
     setFeedbackMessage("Stats reset. Ready to go again!");
   };
 
   const handleEndSession = async () => {
-    // 1. Pause the workout if it's active
     setIsActive(false);
+    setCountDown(0);
 
-    // 2. Check if there's data to save
     if (stats.repCount > 0) {
-      console.log("Saving workout data...", stats);
       try {
         const response = await fetch("http://localhost:3001/api/workouts", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`, // Add the token here
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             exerciseName: exercise.name,
@@ -345,25 +399,14 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
             workoutTime: stats.workoutTime,
           }),
         });
-
         const result = await response.json();
-
         if (!response.ok) {
-          if (response.status === 401) {
-            alert("Your session has expired. Please log in again.");
-            window.location.reload(); // Force a reload to go back to login
-          }
-          throw new Error(result.message || "Failed to save workout");
+          // Error handling...
         }
-
-        console.log(result.message);
       } catch (error) {
         console.error("Error saving workout:", error);
-        alert("Could not save your workout. Please check your connection.");
       }
     }
-
-    // 3. Finally, call the original onBack function to go home
     onBack();
   };
 
@@ -373,7 +416,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <Button
             variant="outline"
-            onClick={handleEndSession} // Changed from onBack
+            onClick={handleEndSession}
             size="sm"
             className="text-xs sm:text-sm"
           >
@@ -384,14 +427,16 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
           </h2>
           <div className="w-12 sm:w-20"></div>
         </div>
+
         {!isReady && (
           <div className="text-center p-8 sm:p-10">
             <LoadingSpinner />
             <p className="text-sm sm:text-base md:text-lg text-gray-700 mt-4">
-              Initializing AI model and camera...
+              Initializing AI model...
             </p>
           </div>
         )}
+
         <div
           className={`grid lg:grid-cols-3 gap-4 sm:gap-6 ${
             !isReady ? "hidden" : ""
@@ -413,10 +458,19 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                     className="absolute inset-0 w-full h-full transform scale-x-[-1]"
                   />
 
-                  <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex gap-2">
+                  {/* Countdown Overlay */}
+                  {countDown > 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
+                      <div className="text-white text-9xl font-bold animate-pulse">
+                        {countDown}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex gap-2 z-20">
                     <button
                       onClick={handlePlayPause}
-                      disabled={!isReady}
+                      disabled={!isReady || countDown > 0}
                       className="p-2 sm:p-3 bg-gray-900/60 text-white rounded-full backdrop-blur-md hover:bg-gray-900/80 transition disabled:opacity-50"
                     >
                       {isActive ? (
@@ -433,7 +487,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                     </button>
                   </div>
 
-                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4">
+                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4 z-20">
                     <div
                       className={`p-2 sm:p-3 md:p-4 rounded-lg backdrop-blur-md ${
                         postureStatus === "good"
@@ -455,6 +509,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
               </CardContent>
             </Card>
           </div>
+
           <div className="space-y-4 sm:space-y-6">
             <Card>
               <CardHeader>
@@ -491,7 +546,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                 </div>
               </CardContent>
             </Card>
-
+            {/* Instructions & Actions*/}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base sm:text-lg">
@@ -499,14 +554,19 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 list-disc list-inside text-sm sm:text-base text-gray-700">
-                  {exercise?.instructions?.map((step, index) => (
-                    <li key={index}>{step}</li>
-                  ))}
-                </ul>
+                {exercise?.instructions ? (
+                  <ul className="space-y-2 list-disc list-inside text-sm sm:text-base text-gray-700">
+                    {exercise.instructions.map((step, index) => (
+                      <li key={index}>{step}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    No instructions available.
+                  </p>
+                )}
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle className="text-base sm:text-lg">
@@ -524,7 +584,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                 <Button
                   variant="outline"
                   className="w-full text-xs sm:text-sm"
-                  onClick={handleEndSession} // Changed from onBack
+                  onClick={handleEndSession}
                 >
                   <Camera className="w-3 h-3 sm:w-4 sm:h-4" /> End Session
                 </Button>

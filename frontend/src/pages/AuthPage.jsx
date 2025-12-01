@@ -95,10 +95,9 @@ export default function AuthPage({ onLogin }) {
               </div>
             )}
 
-            {/* --- EMAIL FIELD FIXED --- */}
+            
             <div className="relative">
               <AtSign className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />{" "}
-              {/* <-- THIS IS THE FIX (top-1/2) */}
               <input
                 type="email"
                 placeholder="Email"
@@ -108,7 +107,6 @@ export default function AuthPage({ onLogin }) {
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
               />
             </div>
-            {/* --- END OF FIX --- */}
 
             <div className="relative">
               <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />

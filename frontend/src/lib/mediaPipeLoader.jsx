@@ -1,4 +1,4 @@
-// --- On-Demand Script Loader ---
+
 const mediaPipeScripts = [
   "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js",
   "https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js",
