@@ -18,20 +18,18 @@ import LoadingSpinner from "../components/LoadingSpinner";
 export default function WorkoutSession({ exerciseId, onBack, token }) {
   const exercise = exercises.find((e) => e.id === exerciseId);
 
-
   const [isReady, setIsReady] = useState(false);
   const [isActive, setIsActive] = useState(false);
-  const [countDown, setCountDown] = useState(0); // --- NEW: Countdown State
+  const [countDown, setCountDown] = useState(0);
   const [stats, setStats] = useState({
     repCount: 0,
     caloriesBurned: 0,
     workoutTime: "00:00",
   });
   const [feedbackMessage, setFeedbackMessage] = useState(
-    "Position yourself in camera view"
+    "Position yourself in camera view",
   );
   const [postureStatus, setPostureStatus] = useState("good");
-
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -39,6 +37,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   const poseRef = useRef(null);
   const workoutIntervalRef = useRef(null);
   const lastRepTimeRef = useRef(0);
+  const lastLegRaisedRef = useRef(null); 
 
   const getInitialState = (id) =>
     id === "squats" || id === "pushups" ? "up" : "down";
@@ -47,7 +46,6 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   const isActiveRef = useRef(isActive);
   isActiveRef.current = isActive;
 
- 
   useEffect(() => {
     let timer;
     if (countDown > 0) {
@@ -63,7 +61,6 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     return () => clearTimeout(timer);
   }, [countDown, feedbackMessage]);
 
-  
   const incrementRep = useCallback(() => {
     const now = Date.now();
     const debounceTime = exercise.debounceTime || 300;
@@ -111,7 +108,6 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     };
   }, [isActive, stats.workoutTime]);
 
-  
   useEffect(() => {
     let isMounted = true;
     let pose = null;
@@ -148,7 +144,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
           0,
           0,
           canvasRef.current.width,
-          canvasRef.current.height
+          canvasRef.current.height,
         );
 
         if (videoRef.current.videoWidth > 0) {
@@ -161,7 +157,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
             canvasCtx,
             results.poseLandmarks,
             window.POSE_CONNECTIONS,
-            { color: "#4ecdc4", lineWidth: 3 }
+            { color: "#4ecdc4", lineWidth: 3 },
           );
           window.drawLandmarks(canvasCtx, results.poseLandmarks, {
             color: "#ff6b6b",
@@ -178,7 +174,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   const angle = calculateAngle(
                     landmarks[11],
                     landmarks[13],
-                    landmarks[15]
+                    landmarks[15],
                   );
                   if (angle > 160 && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
@@ -198,7 +194,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   const angle = calculateAngle(
                     landmarks[23],
                     landmarks[25],
-                    landmarks[27]
+                    landmarks[27],
                   );
                   if (angle > 170 && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
@@ -211,53 +207,29 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   break;
                 }
                 case "pushups": {
-                  if (!checkVisibility(landmarks, [11, 12, 13, 14, 15, 16]))
+                  
+                  if (!checkVisibility(landmarks, [11, 13, 15, 12, 14, 16]))
                     break;
-
-                  const leftShoulder = landmarks[11];
-                  const rightShoulder = landmarks[12];
-                  const leftWrist = landmarks[15];
-                  const rightWrist = landmarks[16];
-
-                  const shoulderWidth = Math.abs(
-                    leftShoulder.x - rightShoulder.x
-                  );
-                  const torsoHeight = Math.abs(
-                    leftShoulder.y - landmarks[23].y
-                  );
-                  if (shoulderWidth < 0.1 && torsoHeight < 0.1) break;
-                  const noseY = landmarks[0].y;
-                  if (leftWrist.y < noseY || rightWrist.y < noseY) break;
-
-                  if (
-                    leftWrist.y < leftShoulder.y + 0.1 ||
-                    rightWrist.y < rightShoulder.y + 0.1
-                  )
-                    break;
-
-                 
-                  const leftElbowAngle = calculateAngle(
+                  const leftAngle = calculateAngle(
                     landmarks[11],
                     landmarks[13],
-                    landmarks[15]
+                    landmarks[15],
                   );
-                  const rightElbowAngle = calculateAngle(
+                  const rightAngle = calculateAngle(
                     landmarks[12],
                     landmarks[14],
-                    landmarks[16]
+                    landmarks[16],
                   );
-                  const avgAngle = (leftElbowAngle + rightElbowAngle) / 2;
+                  const avgAngle = (leftAngle + rightAngle) / 2;
 
-                  if (avgAngle > 165 && exerciseStateRef.current === "down") {
+                  if (avgAngle < 90 && exerciseStateRef.current === "up") {
+                    exerciseStateRef.current = "down";
+                    setFeedbackMessage("Push up!");
+                  }
+                  if (avgAngle > 160 && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
                     incrementRep();
-                    setFeedbackMessage("Excellent push-up!");
-                  } else if (
-                    avgAngle < 90 &&
-                    exerciseStateRef.current === "up"
-                  ) {
-                    exerciseStateRef.current = "down";
-                    setFeedbackMessage("Push back up!");
+                    setFeedbackMessage("Great rep!");
                   }
                   break;
                 }
@@ -272,7 +244,8 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
 
                   const handsUp = leftWristY < noseY && rightWristY < noseY;
                   const handsDown =
-                    leftWristY > leftHipY && rightWristY > rightHipY;
+                    leftWristY >= leftHipY - 0.1 &&
+                    rightWristY >= rightHipY - 0.1;
 
                   if (handsUp && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
@@ -286,24 +259,27 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                 }
                 case "highknees": {
                   if (!checkVisibility(landmarks, [23, 24, 25, 26])) break;
-                  const avgHipY = (landmarks[23].y + landmarks[24].y) / 2;
+
+                  const leftHipY = landmarks[23].y;
+                  const rightHipY = landmarks[24].y;
                   const leftKneeY = landmarks[25].y;
                   const rightKneeY = landmarks[26].y;
-
-                  const isLeftHigh = leftKneeY < avgHipY - 0.05;
-                  const isRightHigh = rightKneeY < avgHipY - 0.05;
-                  const areBothLow =
-                    leftKneeY > avgHipY && rightKneeY > avgHipY;
+                  const hipLevel = (leftHipY + rightHipY) / 2;
 
                   if (
-                    (isLeftHigh || isRightHigh) &&
-                    exerciseStateRef.current === "down"
+                    leftKneeY < hipLevel - 0.05 &&
+                    lastLegRaisedRef.current !== "left"
                   ) {
-                    exerciseStateRef.current = "up";
                     incrementRep();
-                    setFeedbackMessage("Keep going!");
-                  } else if (areBothLow && exerciseStateRef.current === "up") {
-                    exerciseStateRef.current = "down";
+                    lastLegRaisedRef.current = "left";
+                    setFeedbackMessage("Left knee high!");
+                  } else if (
+                    rightKneeY < hipLevel - 0.05 &&
+                    lastLegRaisedRef.current !== "right"
+                  ) {
+                    incrementRep();
+                    lastLegRaisedRef.current = "right";
+                    setFeedbackMessage("Right knee high!");
                   }
                   break;
                 }
@@ -377,6 +353,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     setCountDown(0);
     setStats({ repCount: 0, caloriesBurned: 0, workoutTime: "00:00" });
     exerciseStateRef.current = getInitialState(exerciseId);
+    lastLegRaisedRef.current = null; 
     setFeedbackMessage("Stats reset. Ready to go again!");
   };
 
