@@ -4,6 +4,7 @@ import WorkoutSession from "./pages/WorkoutSession";
 import AuthPage from "./pages/AuthPage"; 
 import HistoryPage from "./pages/HistoryPage";
 import { loadMediaPipeScripts } from "./lib/mediaPipeLoader";
+import Chatbot from "./components/Chatbot";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState("home");
@@ -83,6 +84,8 @@ export default function App() {
               onBack={handleBackToHome} 
             />
           )}
+
+          <Chatbot token={token} />
         </>
       )}
     </div>
