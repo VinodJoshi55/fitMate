@@ -4,10 +4,12 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key"; 
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.use(cors()); 
 app.use(express.json());
@@ -187,6 +189,30 @@ app.post("/api/workouts", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Save workout error:", error);
     res.status(500).json({ message: "Server error saving workout." });
+  }
+});
+
+app.post("/api/chat", authMiddleware, async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    // CORRECT 2026 SYNTAX:
+    // Methods are now called directly via ai.models.methodName
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview", // Use current stable model
+      contents: [{ role: "user", parts: [{ text: message }] }], // Correct parts structure
+      config: {
+        systemInstruction: "You are Fitmate AI. Provide brief, safe fitness advice.", // System prompt goes here
+      }
+    });
+
+    // Access the response text directly
+    const text = result.text; 
+
+    res.json({ reply: text });
+  } catch (error) {
+    console.error("Chat error:", error);
+    res.status(500).json({ message: "Error communicating with Gemini AI." });
   }
 });
 
