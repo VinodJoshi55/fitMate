@@ -5,6 +5,7 @@ import WorkoutSession from "./pages/WorkoutSession";
 import AuthPage from "./pages/AuthPage"; 
 import HistoryPage from "./pages/HistoryPage";
 import { loadMediaPipeScripts } from "./lib/mediaPipeLoader";
+import Chatbot from "./components/Chatbot";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState("home");
@@ -59,7 +60,6 @@ export default function App() {
     setCurrentPage("profile");
   };
 
-
  return (
    <div className="min-h-screen">
      {!token ? (
@@ -98,4 +98,39 @@ export default function App() {
      )}
    </div>
  );
+  return (
+    <div className="min-h-screen">
+      {!token ? (
+        <AuthPage onLogin={handleLogin} />
+      ) : (
+        <>
+          {currentPage === "home" && (
+            <HomePage
+              onStartWorkout={handleStartWorkout}
+              isLoading={isModelLoading}
+              onLogout={handleLogout}
+              onShowHistory={handleShowHistory}
+            />
+          )}
+          {currentPage === "workout" && (
+            <WorkoutSession
+              key={selectedExerciseId}
+              exerciseId={selectedExerciseId}
+              onBack={handleBackToHome}
+              token={token} 
+            />
+          )}
+          {currentPage === "history" && (
+            <HistoryPage
+              token={token}
+              onBack={handleBackToHome} 
+            />
+          )}
+
+          <Chatbot token={token} />
+        </>
+      )}
+    </div>
+  );
+
 }
