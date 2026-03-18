@@ -1,4 +1,5 @@
 import React from "react";
+import { User } from "lucide-react";
 import { Activity, LogOut, BookOpen } from "lucide-react";
 import Button from "../components/Button";
 import { exercises } from "../data/exercises";
@@ -8,6 +9,7 @@ export default function HomePage({
   isLoading,
   onLogout,
   onShowHistory,
+  onShowProfile,
 }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3 sm:p-4 md:p-6">
@@ -32,6 +34,17 @@ export default function HomePage({
               <BookOpen className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline ml-2">History</span>
             </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
+              onClick={onShowProfile}
+            >
+              <User className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-2">Profile</span>
+            </Button>
+
             <Button
               variant="outline"
               size="sm"

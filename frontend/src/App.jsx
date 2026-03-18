@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ProfilePage from "./pages/ProfilePage";
 import HomePage from "./pages/HomePage";
 import WorkoutSession from "./pages/WorkoutSession";
 import AuthPage from "./pages/AuthPage"; 
@@ -54,37 +55,47 @@ export default function App() {
     setCurrentPage("history");
   };
 
+  const handleShowProfile = () => {
+    setCurrentPage("profile");
+  };
 
-  return (
-    <div className="min-h-screen">
-      {!token ? (
-        <AuthPage onLogin={handleLogin} />
-      ) : (
-        <>
-          {currentPage === "home" && (
-            <HomePage
-              onStartWorkout={handleStartWorkout}
-              isLoading={isModelLoading}
-              onLogout={handleLogout}
-              onShowHistory={handleShowHistory}
-            />
-          )}
-          {currentPage === "workout" && (
-            <WorkoutSession
-              key={selectedExerciseId}
-              exerciseId={selectedExerciseId}
-              onBack={handleBackToHome}
-              token={token} 
-            />
-          )}
-          {currentPage === "history" && (
-            <HistoryPage
-              token={token}
-              onBack={handleBackToHome} 
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
+
+ return (
+   <div className="min-h-screen">
+     {!token ? (
+       <AuthPage onLogin={handleLogin} />
+     ) : (
+       <>
+         {currentPage === "home" && (
+           <HomePage
+             onStartWorkout={handleStartWorkout}
+             isLoading={isModelLoading}
+             onLogout={handleLogout}
+             onShowHistory={handleShowHistory}
+             onShowProfile={handleShowProfile}
+           />
+         )}
+         {currentPage === "workout" && (
+           <WorkoutSession
+             key={selectedExerciseId}
+             exerciseId={selectedExerciseId}
+             onBack={handleBackToHome}
+             token={token}
+           />
+         )}
+         {currentPage === "history" && (
+           <HistoryPage token={token} onBack={handleBackToHome} />
+         )}
+         {currentPage === "profile" && (
+           <ProfilePage
+             onBack={handleBackToHome}
+             onSave={(data) => {
+               console.log("Profile Saved:", data);
+             }}
+           />
+         )}
+       </>
+     )}
+   </div>
+ );
 }

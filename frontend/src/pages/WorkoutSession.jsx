@@ -37,10 +37,10 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   const poseRef = useRef(null);
   const workoutIntervalRef = useRef(null);
   const lastRepTimeRef = useRef(0);
-  const lastLegRaisedRef = useRef(null); 
+  const lastLegRaisedRef = useRef(null);
 
   const getInitialState = (id) =>
-    id === "squats" || id === "pushups" ? "up" : "down";
+    id === "squats" || id === "pushups" || id === "lunges" ? "up" : "down";
   const exerciseStateRef = useRef(getInitialState(exerciseId));
 
   const isActiveRef = useRef(isActive);
@@ -207,7 +207,6 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   break;
                 }
                 case "pushups": {
-                  
                   if (!checkVisibility(landmarks, [11, 13, 15, 12, 14, 16]))
                     break;
                   const leftAngle = calculateAngle(
@@ -283,6 +282,134 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   }
                   break;
                 }
+                case "lunges": {
+                  if (!checkVisibility(landmarks, [23, 25, 27, 24, 26, 28]))
+                    break;
+
+                  const leftKneeAngle = calculateAngle(
+                    landmarks[23],
+                    landmarks[25],
+                    landmarks[27],
+                  );
+                  const rightKneeAngle = calculateAngle(
+                    landmarks[24],
+                    landmarks[26],
+                    landmarks[28],
+                  );
+
+                  // Track the leg that is bending the most
+                  const minAngle = Math.min(leftKneeAngle, rightKneeAngle);
+
+                  if (minAngle > 160 && exerciseStateRef.current === "down") {
+                    exerciseStateRef.current = "up";
+                    incrementRep();
+                    setFeedbackMessage("Great lunge! Switch legs.");
+                  } else if (
+                    minAngle < 100 &&
+                    exerciseStateRef.current === "up"
+                  ) {
+                    exerciseStateRef.current = "down";
+                    setFeedbackMessage("Push back up.");
+                  }
+                  break;
+                }
+
+                case "legraises": {
+                  if (!checkVisibility(landmarks, [11, 23, 27, 12, 24, 28]))
+                    break;
+
+                  // Calculate hip angle using shoulder, hip, and ankle
+                  const leftHipAngle = calculateAngle(
+                    landmarks[11],
+                    landmarks[23],
+                    landmarks[27],
+                  );
+                  const rightHipAngle = calculateAngle(
+                    landmarks[12],
+                    landmarks[24],
+                    landmarks[28],
+                  );
+                  const avgHipAngle = (leftHipAngle + rightHipAngle) / 2;
+
+                  if (
+                    avgHipAngle < 120 &&
+                    exerciseStateRef.current === "down"
+                  ) {
+                    exerciseStateRef.current = "up";
+                    setFeedbackMessage("Lower legs slowly.");
+                  } else if (
+                    avgHipAngle > 160 &&
+                    exerciseStateRef.current === "up"
+                  ) {
+                    exerciseStateRef.current = "down";
+                    incrementRep();
+                    setFeedbackMessage("Great rep!");
+                  }
+                  break;
+                }
+
+                case "plank": {
+                  if (!checkVisibility(landmarks, [11, 23, 27, 12, 24, 28]))
+                    break;
+
+                  const leftBodyAngle = calculateAngle(
+                    landmarks[11],
+                    landmarks[23],
+                    landmarks[27],
+                  );
+                  const rightBodyAngle = calculateAngle(
+                    landmarks[12],
+                    landmarks[24],
+                    landmarks[28],
+                  );
+                  const avgBodyAngle = (leftBodyAngle + rightBodyAngle) / 2;
+
+                  if (avgBodyAngle > 160) {
+                    setFeedbackMessage("Great posture! Hold it.");
+                  } else {
+                    setFeedbackMessage("Keep your back straight!");
+                  }
+                  break;
+                }
+
+                case "shoulderpress": {
+                  if (!checkVisibility(landmarks, [11, 13, 15, 12, 14, 16]))
+                    break;
+
+                  const leftAngle = calculateAngle(
+                    landmarks[11],
+                    landmarks[13],
+                    landmarks[15],
+                  );
+                  const rightAngle = calculateAngle(
+                    landmarks[12],
+                    landmarks[14],
+                    landmarks[16],
+                  );
+                  const avgAngle = (leftAngle + rightAngle) / 2;
+                  const wristsAboveShoulders =
+                    landmarks[15].y < landmarks[11].y &&
+                    landmarks[16].y < landmarks[12].y;
+
+                  if (
+                    avgAngle > 150 &&
+                    wristsAboveShoulders &&
+                    exerciseStateRef.current === "down"
+                  ) {
+                    exerciseStateRef.current = "up";
+                    incrementRep();
+                    setFeedbackMessage("Great press! Lower slowly.");
+                  }
+            
+                  else if (
+                    avgAngle < 100 &&
+                    exerciseStateRef.current === "up"
+                  ) {
+                    exerciseStateRef.current = "down";
+                    setFeedbackMessage("Push up!");
+                  }
+                  break;
+                }
               }
             } catch (error) {
               console.error("Error processing pose:", error);
@@ -353,7 +480,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     setCountDown(0);
     setStats({ repCount: 0, caloriesBurned: 0, workoutTime: "00:00" });
     exerciseStateRef.current = getInitialState(exerciseId);
-    lastLegRaisedRef.current = null; 
+    lastLegRaisedRef.current = null;
     setFeedbackMessage("Stats reset. Ready to go again!");
   };
 
