@@ -7,6 +7,8 @@ import {
   RotateCcw,
   CheckCircle,
   AlertCircle,
+  Video,
+  X
 } from "lucide-react";
 import { exercises } from "../data/exercises";
 import { calculateAngle, checkVisibility } from "../utils/poseUtils";
@@ -30,6 +32,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     "Position yourself in camera view",
   );
   const [postureStatus, setPostureStatus] = useState("good");
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -526,9 +529,22 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
           >
             ← <span className="hidden sm:inline ml-1">Back</span>
           </Button>
-          <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
-            {exercise?.name}
-          </h2>
+
+          <div className="flex items-center gap-3">
+            <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
+              {exercise?.name}
+            </h2>
+            {exercise?.videoUrl && (
+              <button
+                onClick={() => setShowVideoModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg transition-colors"
+              >
+                <Video size={16} />
+                <span className="hidden sm:inline">How to do</span>
+              </button>
+            )}
+          </div>
+
           <div className="w-12 sm:w-20"></div>
         </div>
 
@@ -696,6 +712,46 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
             </Card>
           </div>
         </div>
+        {showVideoModal && exercise?.videoUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="flex justify-between items-center p-4 border-b">
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                  <Video className="w-5 h-5 text-indigo-600" />
+                  How to do {exercise.name}
+                </h3>
+                <button
+                  onClick={() => setShowVideoModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+              {/* Video */}
+              <div className="p-4 bg-gray-50">
+                <div
+                  className="relative w-full rounded-lg overflow-hidden bg-black"
+                  style={{ paddingTop: "56.25%" }}
+                >
+                  <iframe
+                    className="absolute top-0 left-0 w-full h-full"
+                    src={exercise.videoUrl}
+                    title={`${exercise.name} tutorial`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                </div>
+              </div>
+              {/* Footer */}
+              <div className="p-4 border-t flex justify-end">
+                <Button onClick={() => setShowVideoModal(false)}>
+                  Got it!
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
