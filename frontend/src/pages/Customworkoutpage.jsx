@@ -21,8 +21,8 @@ import { calculateAngle, checkVisibility } from "../utils/poseUtils";
 import { loadMediaPipeScripts } from "../lib/mediaPipeLoader";
 import LoadingSpinner from "../components/LoadingSpinner";
 
-// ─── REST SCREEN ──────────────────────────────────────────────────────────────
-function RestScreen({ seconds, nextExercise, onSkip }) {
+// ─── REST OVERLAY (rendered inside the camera box) ───────────────────────────
+function RestOverlay({ seconds, nextExercise, onSkip }) {
   const [remaining, setRemaining] = useState(seconds);
   useEffect(() => {
     if (remaining <= 0) {
@@ -34,20 +34,23 @@ function RestScreen({ seconds, nextExercise, onSkip }) {
   }, [remaining, onSkip]);
   const pct = ((seconds - remaining) / seconds) * 100;
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full text-center space-y-6">
-        <div className="text-indigo-500 flex justify-center">
-          <Timer className="w-12 h-12" />
+    <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-30">
+      <div className="text-center text-white space-y-4 px-6">
+        <div className="flex items-center justify-center gap-2 text-indigo-300">
+          <Timer className="w-6 h-6" />
+          <span className="text-lg font-bold uppercase tracking-widest">
+            Rest
+          </span>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">Rest Time</h2>
-        <div className="relative w-36 h-36 mx-auto">
+        {/* Circular timer */}
+        <div className="relative w-32 h-32 mx-auto">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
             <circle
               cx="50"
               cy="50"
               r="44"
               fill="none"
-              stroke="#e0e7ff"
+              stroke="rgba(255,255,255,0.15)"
               strokeWidth="8"
             />
             <circle
@@ -64,18 +67,15 @@ function RestScreen({ seconds, nextExercise, onSkip }) {
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-4xl font-bold text-indigo-600">
-              {remaining}
-            </span>
+            <span className="text-5xl font-bold">{remaining}</span>
           </div>
         </div>
-        <p className="text-gray-500 text-sm">
-          Next up:{" "}
-          <span className="font-semibold text-gray-800">{nextExercise}</span>
+        <p className="text-sm text-gray-300">
+          Next: <span className="font-semibold text-white">{nextExercise}</span>
         </p>
         <button
           onClick={onSkip}
-          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+          className="mt-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center gap-2 mx-auto transition-colors"
         >
           <SkipForward className="w-4 h-4" /> Skip Rest
         </button>
@@ -93,6 +93,8 @@ function ExerciseSession({
   token,
   onDone,
   onBack,
+  autoStart, // if true, skip the play-button step and auto-countdown on ready
+  restOverlay, // { seconds, nextExercise, onSkip } – if set, show rest overlay on camera
 }) {
   const exercise = exercises.find((e) => e.id === exerciseId);
   const [isReady, setIsReady] = useState(false);
@@ -115,11 +117,22 @@ function ExerciseSession({
   const lastRepTimeRef = useRef(0);
   const lastLegRaisedRef = useRef(null);
   const repCountRef = useRef(0);
+  // Store latest workout stats in a ref so the auto-advance timeout can read them
+  const workoutStatsRef = useRef({
+    repCount: 0,
+    caloriesBurned: 0,
+    workoutTime: "00:00",
+  });
   const getInitialState = (id) =>
     id === "squats" || id === "pushups" || id === "lunges" ? "up" : "down";
   const exerciseStateRef = useRef(getInitialState(exerciseId));
   const isActiveRef = useRef(false);
   isActiveRef.current = isActive;
+
+  // Keep workoutStatsRef in sync
+  useEffect(() => {
+    workoutStatsRef.current = { repCount, caloriesBurned, workoutTime };
+  }, [repCount, caloriesBurned, workoutTime]);
 
   // Countdown logic
   useEffect(() => {
@@ -150,6 +163,42 @@ function ExerciseSession({
     return () => clearInterval(workoutIntervalRef.current);
   }, [isActive]);
 
+  // ── AUTO-ADVANCE: save result & call onDone 1.5s after done ──
+  useEffect(() => {
+    if (!done) return;
+    const timeout = setTimeout(async () => {
+      const {
+        repCount: rc,
+        caloriesBurned: cal,
+        workoutTime: wt,
+      } = workoutStatsRef.current;
+      if (rc > 0) {
+        try {
+          await fetch("http://localhost:3001/api/workouts", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              exerciseName: exercise.name,
+              repCount: rc,
+              caloriesBurned: Math.round(cal),
+              workoutTime: wt,
+            }),
+          });
+        } catch (e) {}
+      }
+      onDone({
+        exerciseName: exercise.name,
+        repCount: rc,
+        caloriesBurned: Math.round(cal),
+        workoutTime: wt,
+      });
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const incrementRep = useCallback(() => {
     const now = Date.now();
     if (now - lastRepTimeRef.current < (exercise.debounceTime || 300)) return;
@@ -162,7 +211,7 @@ function ExerciseSession({
     if (repCountRef.current >= targetReps) {
       setIsActive(false);
       setDone(true);
-      setFeedbackMessage(`🎉 ${targetReps} reps done!`);
+      setFeedbackMessage(`🎉 ${targetReps} reps done! Moving on...`);
     }
   }, [exercise.caloriesPerRep, exercise.debounceTime, targetReps]);
 
@@ -369,7 +418,12 @@ function ExerciseSession({
           await camera.start();
           if (isMounted) {
             setIsReady(true);
-            setFeedbackMessage('Ready! Press "Play" to begin.');
+            if (autoStart) {
+              // Auto-begin countdown without waiting for play button
+              setCountDown(3);
+            } else {
+              setFeedbackMessage('Ready! Press "Play" to begin.');
+            }
           }
         } catch (e) {}
       }
@@ -383,7 +437,7 @@ function ExerciseSession({
       poseRef.current?.close();
       poseRef.current = null;
     };
-  }, [exerciseId, incrementRep]);
+  }, [exerciseId, incrementRep, autoStart]);
 
   const handlePlayPause = () => {
     if (!isReady || done) return;
@@ -394,7 +448,8 @@ function ExerciseSession({
     } else setCountDown(3);
   };
 
-  const handleFinish = async () => {
+  // Manual "finish early" — save & advance immediately without waiting for target reps
+  const handleFinishEarly = async () => {
     setIsActive(false);
     if (repCount > 0) {
       try {
@@ -495,21 +550,35 @@ function ExerciseSession({
                     <p className="text-gray-300">
                       {repCount} reps · {Math.round(caloriesBurned)} kcal
                     </p>
+                    <p className="text-sm text-gray-400 animate-pulse">
+                      Moving to next exercise...
+                    </p>
                   </div>
                 </div>
               )}
+              {/* Rest overlay — shown on top of camera between exercises */}
+              {restOverlay && (
+                <RestOverlay
+                  seconds={restOverlay.seconds}
+                  nextExercise={restOverlay.nextExercise}
+                  onSkip={restOverlay.onSkip}
+                />
+              )}
               <div className="absolute top-3 left-3 flex gap-2 z-20">
-                <button
-                  onClick={handlePlayPause}
-                  disabled={!isReady || done || countDown > 0}
-                  className="p-2.5 bg-gray-900/60 text-white rounded-full backdrop-blur-md hover:bg-gray-900/80 transition disabled:opacity-40"
-                >
-                  {isActive ? (
-                    <Pause className="w-5 h-5" />
-                  ) : (
-                    <Play className="w-5 h-5" />
-                  )}
-                </button>
+                {/* Only show play/pause when not in rest and not auto-started */}
+                {!restOverlay && (
+                  <button
+                    onClick={handlePlayPause}
+                    disabled={!isReady || done || countDown > 0}
+                    className="p-2.5 bg-gray-900/60 text-white rounded-full backdrop-blur-md hover:bg-gray-900/80 transition disabled:opacity-40"
+                  >
+                    {isActive ? (
+                      <Pause className="w-5 h-5" />
+                    ) : (
+                      <Play className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
               </div>
               <div className="absolute bottom-3 left-3 right-3 z-20">
                 <div
@@ -584,13 +653,14 @@ function ExerciseSession({
               </ul>
             </div>
 
-            {/* Finish button */}
+            {/* Finish early button — always visible for manual skip */}
             <button
-              onClick={handleFinish}
-              className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center justify-center gap-2 transition-colors shadow-md shadow-indigo-200"
+              onClick={handleFinishEarly}
+              disabled={done}
+              className="w-full py-3.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
             >
-              <CheckCircle className="w-5 h-5" />
-              {done ? "Next Exercise" : "Finish & Continue"}
+              <SkipForward className="w-5 h-5" />
+              Skip & Continue
             </button>
           </div>
         </div>
@@ -659,26 +729,29 @@ function WorkoutSummary({ plan, results, onBack }) {
 
 // ─── PLAN BUILDER ─────────────────────────────────────────────────────────────
 export default function CustomWorkoutPage({ onBack, token }) {
-  const [plan, setPlan] = useState([]); // [{exerciseId, reps}]
+  const [plan, setPlan] = useState([]); // [{uid, exerciseId, reps}]
   const [restTime, setRestTime] = useState(30);
-  const [phase, setPhase] = useState("build"); // build | loading | exercise | rest | summary
+  const [phase, setPhase] = useState("build"); // build | exercise | summary
   const [currentStep, setCurrentStep] = useState(0);
   const [results, setResults] = useState([]);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [restOverlayActive, setRestOverlayActive] = useState(false);
+  const [restNextExercise, setRestNextExercise] = useState("");
 
+  // Each entry gets a unique id so the same exercise can appear multiple times
   const addExercise = (exerciseId) => {
-    if (plan.some((p) => p.exerciseId === exerciseId)) return;
-    setPlan((prev) => [...prev, { exerciseId, reps: 10 }]);
+    setPlan((prev) => [
+      ...prev,
+      { uid: `${exerciseId}-${Date.now()}`, exerciseId, reps: 10 },
+    ]);
   };
 
-  const removeExercise = (exerciseId) =>
-    setPlan((prev) => prev.filter((p) => p.exerciseId !== exerciseId));
+  const removeExercise = (uid) =>
+    setPlan((prev) => prev.filter((p) => p.uid !== uid));
 
-  const updateReps = (exerciseId, reps) => {
+  const updateReps = (uid, reps) => {
     const v = Math.max(1, Math.min(200, Number(reps) || 1));
-    setPlan((prev) =>
-      prev.map((p) => (p.exerciseId === exerciseId ? { ...p, reps: v } : p)),
-    );
+    setPlan((prev) => prev.map((p) => (p.uid === uid ? { ...p, reps: v } : p)));
   };
 
   const moveUp = (i) => {
@@ -706,6 +779,7 @@ export default function CustomWorkoutPage({ onBack, token }) {
     setIsLoadingModel(false);
     setCurrentStep(0);
     setResults([]);
+    setRestOverlayActive(false);
     setPhase("exercise");
   };
 
@@ -715,37 +789,29 @@ export default function CustomWorkoutPage({ onBack, token }) {
     if (currentStep + 1 >= plan.length) {
       setPhase("summary");
     } else {
-      setPhase("rest");
+      // Capture next exercise name NOW (before currentStep increments) so the rest overlay shows correctly
+      const nextName =
+        exercises.find((e) => e.id === plan[currentStep + 1]?.exerciseId)
+          ?.name || "";
+      setRestNextExercise(nextName);
+      setCurrentStep((s) => s + 1);
+      setRestOverlayActive(true);
     }
   };
 
   const handleRestDone = () => {
-    setCurrentStep((s) => s + 1);
-    setPhase("exercise");
+    setRestOverlayActive(false);
   };
 
   // ── PHASES ──
   if (phase === "summary")
     return <WorkoutSummary plan={plan} results={results} onBack={onBack} />;
 
-  if (phase === "rest") {
-    const next = exercises.find(
-      (e) => e.id === plan[currentStep + 1]?.exerciseId,
-    );
-    return (
-      <RestScreen
-        seconds={restTime}
-        nextExercise={next?.name || ""}
-        onSkip={handleRestDone}
-      />
-    );
-  }
-
   if (phase === "exercise") {
     const step = plan[currentStep];
     return (
       <ExerciseSession
-        key={`${step.exerciseId}-${currentStep}`}
+        key={step.uid}
         exerciseId={step.exerciseId}
         targetReps={step.reps}
         stepIndex={currentStep}
@@ -753,13 +819,21 @@ export default function CustomWorkoutPage({ onBack, token }) {
         token={token}
         onDone={handleExerciseDone}
         onBack={onBack}
+        autoStart={currentStep > 0}
+        restOverlay={
+          restOverlayActive
+            ? {
+                seconds: restTime,
+                nextExercise: restNextExercise,
+                onSkip: handleRestDone,
+              }
+            : null
+        }
       />
     );
   }
 
   // ── BUILD PHASE ──
-  const usedIds = new Set(plan.map((p) => p.exerciseId));
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
@@ -783,28 +857,19 @@ export default function CustomWorkoutPage({ onBack, token }) {
                 <Dumbbell className="w-4 h-4 text-indigo-500" /> Exercises
               </h3>
               <div className="space-y-2">
-                {exercises.map((ex) => {
-                  const added = usedIds.has(ex.id);
-                  return (
-                    <button
-                      key={ex.id}
-                      onClick={() => addExercise(ex.id)}
-                      disabled={added}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-sm transition-all border
-                        ${added ? "bg-indigo-50 border-indigo-200 text-indigo-500 cursor-default" : "bg-gray-50 border-gray-100 hover:bg-indigo-50 hover:border-indigo-200 text-gray-700"}`}
-                    >
-                      <div>
-                        <p className="font-medium">{ex.name}</p>
-                        <p className="text-xs text-gray-400">{ex.difficulty}</p>
-                      </div>
-                      {added ? (
-                        <CheckCircle className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                      ) : (
-                        <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
+                {exercises.map((ex) => (
+                  <button
+                    key={ex.id}
+                    onClick={() => addExercise(ex.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm transition-all border bg-gray-50 border-gray-100 hover:bg-indigo-50 hover:border-indigo-200 text-gray-700"
+                  >
+                    <div>
+                      <p className="font-medium">{ex.name}</p>
+                      <p className="text-xs text-gray-400">{ex.difficulty}</p>
+                    </div>
+                    <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -858,7 +923,7 @@ export default function CustomWorkoutPage({ onBack, token }) {
                     const ex = exercises.find((e) => e.id === item.exerciseId);
                     return (
                       <div
-                        key={item.exerciseId}
+                        key={item.uid}
                         className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100"
                       >
                         {/* Order buttons */}
@@ -897,9 +962,7 @@ export default function CustomWorkoutPage({ onBack, token }) {
                         {/* Reps input */}
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button
-                            onClick={() =>
-                              updateReps(item.exerciseId, item.reps - 1)
-                            }
+                            onClick={() => updateReps(item.uid, item.reps - 1)}
                             className="w-6 h-6 rounded-lg bg-gray-200 hover:bg-indigo-100 text-gray-600 font-bold text-sm flex items-center justify-center transition-colors"
                           >
                             −
@@ -908,16 +971,14 @@ export default function CustomWorkoutPage({ onBack, token }) {
                             type="number"
                             value={item.reps}
                             onChange={(e) =>
-                              updateReps(item.exerciseId, e.target.value)
+                              updateReps(item.uid, e.target.value)
                             }
                             min="1"
                             max="200"
                             className="w-12 text-center text-sm font-bold text-gray-900 border border-gray-200 rounded-lg py-0.5 outline-none focus:ring-2 focus:ring-indigo-400"
                           />
                           <button
-                            onClick={() =>
-                              updateReps(item.exerciseId, item.reps + 1)
-                            }
+                            onClick={() => updateReps(item.uid, item.reps + 1)}
                             className="w-6 h-6 rounded-lg bg-gray-200 hover:bg-indigo-100 text-gray-600 font-bold text-sm flex items-center justify-center transition-colors"
                           >
                             +
@@ -929,7 +990,7 @@ export default function CustomWorkoutPage({ onBack, token }) {
 
                         {/* Remove */}
                         <button
-                          onClick={() => removeExercise(item.exerciseId)}
+                          onClick={() => removeExercise(item.uid)}
                           className="p-1.5 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
                         >
                           <Trash2 className="w-4 h-4" />

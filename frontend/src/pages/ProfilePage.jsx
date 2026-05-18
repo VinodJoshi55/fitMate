@@ -96,7 +96,6 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
     setSelectedDate(selectedDate === ds ? null : ds);
   };
 
-  // workouts on the selected date
   const selectedWorkouts = selectedDate
     ? allWorkouts.filter(
         (w) => toDateStr(new Date(w.session_date)) === selectedDate,
@@ -202,7 +201,6 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
         </span>
       </div>
 
-      {/* Detail panel — slides in when a date is selected */}
       {selectedDate && (
         <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4 animate-fade-in">
           <div className="flex items-center justify-between mb-3">
@@ -270,22 +268,11 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
   );
 }
 
-export default function ProfilePage({ onSave, onBack, token }) {
-  const emptyProfile = {
-    firstName: "",
-    lastName: "",
-    age: "",
-    gender: "",
-    height: "",
-    weight: "",
-    targetWeight: "",
-    diet: "",
-    experience: "",
-    fitnessGoal: "",
-  };
-  const [profile, setProfile] = useState(() => {
+// ── Helper: load & validate profile from localStorage ──────────────────────────
+function loadSavedProfile() {
+  try {
     const saved = localStorage.getItem("userProfile");
-    if (!saved) return emptyProfile;
+    if (!saved) return null;
     const parsed = JSON.parse(saved);
     // Wipe stale profiles saved with old pre-filled defaults
     const stale =
@@ -295,14 +282,34 @@ export default function ProfilePage({ onSave, onBack, token }) {
       parsed.fitnessGoal === "lose_weight";
     if (stale) {
       localStorage.removeItem("userProfile");
-      return emptyProfile;
+      return null;
     }
     return parsed;
-  });
+  } catch {
+    return null;
+  }
+}
 
-  const [isEditing, setIsEditing] = useState(
-    () => !localStorage.getItem("userProfile"),
-  );
+const emptyProfile = {
+  firstName: "",
+  lastName: "",
+  age: "",
+  gender: "",
+  height: "",
+  weight: "",
+  targetWeight: "",
+  diet: "",
+  experience: "",
+  fitnessGoal: "",
+};
+
+export default function ProfilePage({ onSave, onBack, token }) {
+  const savedProfile = loadSavedProfile();
+
+  // isEditing is true ONLY when there is no saved profile yet (first visit).
+  // Subsequent renders always start in view mode.
+  const [profile, setProfile] = useState(savedProfile ?? emptyProfile);
+  const [isEditing, setIsEditing] = useState(!savedProfile);
   const [isSaved, setIsSaved] = useState(false);
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
@@ -509,7 +516,9 @@ export default function ProfilePage({ onSave, onBack, token }) {
 
   const renderEditMode = () => (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h3 className="text-lg font-bold text-gray-900 mb-6">Edit Profile</h3>
+      <h3 className="text-lg font-bold text-gray-900 mb-6">
+        {loadSavedProfile() ? "Edit Profile" : "Complete Your Profile"}
+      </h3>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -673,14 +682,17 @@ export default function ProfilePage({ onSave, onBack, token }) {
         </div>
 
         <div className="flex gap-3 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => setIsEditing(false)}
-          >
-            Cancel
-          </Button>
+          {/* Only show Cancel if there's an existing profile to go back to */}
+          {loadSavedProfile() && (
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </Button>
+          )}
           <button
             type="submit"
             className={`flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-300 ${isSaved ? "bg-green-500 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
