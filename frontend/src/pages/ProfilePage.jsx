@@ -22,6 +22,19 @@ import Button from "../components/Button";
 
 const API_BASE = "http://localhost:3001";
 
+const emptyProfile = {
+  firstName: "",
+  lastName: "",
+  age: "",
+  gender: "",
+  height: "",
+  weight: "",
+  targetWeight: "",
+  diet: "",
+  experience: "",
+  fitnessGoal: "",
+};
+
 function toDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -67,7 +80,6 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
     new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selectedDate, setSelectedDate] = useState(null);
-
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -76,32 +88,14 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
     month: "long",
     year: "numeric",
   });
-
-  const prevMonth = () => {
-    setSelectedDate(null);
-    setViewDate(new Date(year, month - 1, 1));
-  };
-  const nextMonth = () => {
-    const next = new Date(year, month + 1, 1);
-    if (next <= new Date(today.getFullYear(), today.getMonth(), 1)) {
-      setSelectedDate(null);
-      setViewDate(next);
-    }
-  };
   const isNextDisabled =
     year === today.getFullYear() && month === today.getMonth();
-
-  const handleDayClick = (ds, isFuture) => {
-    if (isFuture) return;
-    setSelectedDate(selectedDate === ds ? null : ds);
-  };
 
   const selectedWorkouts = selectedDate
     ? allWorkouts.filter(
         (w) => toDateStr(new Date(w.session_date)) === selectedDate,
       )
     : [];
-
   const selectedDateLabel = selectedDate
     ? new Date(selectedDate + "T00:00:00").toLocaleDateString("default", {
         weekday: "long",
@@ -112,22 +106,18 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
 
   const days = [];
   for (let i = 0; i < firstDay; i++) days.push(<div key={`e${i}`} />);
-
   for (let d = 1; d <= daysInMonth; d++) {
     const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const info = workoutMap[ds];
     const isToday = ds === toDateStr(today);
     const isFuture = new Date(ds) > today;
     const isSelected = selectedDate === ds;
-
     days.push(
       <button
         key={d}
-        onClick={() => handleDayClick(ds, isFuture)}
+        onClick={() => !isFuture && setSelectedDate(isSelected ? null : ds)}
         disabled={isFuture}
-        className={`
-          aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-medium
-          transition-all duration-150 w-full
+        className={`aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-medium transition-all duration-150 w-full
           ${isFuture ? "opacity-30 cursor-default" : "cursor-pointer"}
           ${
             isSelected
@@ -137,8 +127,7 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
                 : isToday
                   ? "ring-2 ring-indigo-400 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
                   : "bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:border-gray-200"
-          }
-        `}
+          }`}
       >
         <span>{d}</span>
         {info && !isFuture && info.sessions > 1 && (
@@ -154,12 +143,14 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
     <div className="mt-8 pt-8 border-t border-gray-100">
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <CalendarIcon className="w-5 h-5 text-indigo-500" />
-          Workout Activity
+          <CalendarIcon className="w-5 h-5 text-indigo-500" /> Workout Activity
         </h4>
         <div className="flex items-center gap-2">
           <button
-            onClick={prevMonth}
+            onClick={() => {
+              setSelectedDate(null);
+              setViewDate(new Date(year, month - 1, 1));
+            }}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -168,7 +159,13 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
             {monthLabel}
           </span>
           <button
-            onClick={nextMonth}
+            onClick={() => {
+              const n = new Date(year, month + 1, 1);
+              if (n <= new Date(today.getFullYear(), today.getMonth(), 1)) {
+                setSelectedDate(null);
+                setViewDate(n);
+              }
+            }}
             disabled={isNextDisabled}
             className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors text-gray-500"
           >
@@ -176,7 +173,6 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
           </button>
         </div>
       </div>
-
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <div className="grid grid-cols-7 gap-1.5 text-center mb-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
@@ -186,80 +182,122 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
         <div className="grid grid-cols-7 gap-1.5">{days}</div>
       </div>
 
-      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-indigo-500 inline-block" />{" "}
-          Workout done
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200 inline-block" />{" "}
-          Rest day
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded ring-2 ring-indigo-400 bg-indigo-50 inline-block" />{" "}
-          Today
-        </span>
-      </div>
-
       {selectedDate && (
-        <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4 animate-fade-in">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-indigo-800">
-              {selectedDateLabel}
-            </p>
-            <button
-              onClick={() => setSelectedDate(null)}
-              className="text-indigo-400 hover:text-indigo-600 text-lg leading-none"
-            >
-              ×
-            </button>
+        <div className="mt-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-blue-50 overflow-hidden">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-indigo-100 bg-white/60">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-indigo-500" />
+              <p className="text-sm font-semibold text-gray-800">
+                {selectedDateLabel}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedWorkouts.length > 0 && (
+                <span className="text-[11px] font-medium bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
+                  {selectedWorkouts.length} session
+                  {selectedWorkouts.length > 1 ? "s" : ""}
+                </span>
+              )}
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="w-6 h-6 rounded-full bg-gray-100 hover:bg-red-50 hover:text-red-400 text-gray-400 flex items-center justify-center text-sm transition-colors"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {selectedWorkouts.length === 0 ? (
-            <p className="text-sm text-indigo-400 italic">
-              No workouts logged on this day.
-            </p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mb-2">
+                <span className="text-lg">😴</span>
+              </div>
+              <p className="text-sm font-medium text-gray-500">Rest day</p>
+              <p className="text-xs text-gray-400 mt-0.5">No workouts logged</p>
+            </div>
           ) : (
-            <div className="space-y-2">
-              {selectedWorkouts.map((w) => (
+            <div className="p-3 space-y-2">
+              {selectedWorkouts.map((w, idx) => (
                 <div
                   key={w._id}
-                  className="bg-white rounded-lg p-3 border border-indigo-100 flex items-center justify-between"
+                  className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {w.exerciseName}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                  {/* Exercise name bar */}
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-gray-50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                        {idx + 1}
+                      </span>
+                      <p className="text-sm font-bold text-gray-900">
+                        {w.exerciseName}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
                       {new Date(w.session_date).toLocaleTimeString("default", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </p>
                   </div>
-                  <div className="flex gap-3 text-right">
-                    <div>
-                      <p className="text-sm font-bold text-indigo-600">
+                  {/* Stats row */}
+                  <div className="grid grid-cols-3 divide-x divide-gray-100">
+                    <div className="flex flex-col items-center py-2.5">
+                      <p className="text-base font-bold text-indigo-600">
                         {w.repCount}
                       </p>
-                      <p className="text-[10px] text-gray-400">reps</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wide">
+                        Reps
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-green-600">
+                    <div className="flex flex-col items-center py-2.5">
+                      <p className="text-base font-bold text-green-600">
                         {Math.round(w.caloriesBurned)}
                       </p>
-                      <p className="text-[10px] text-gray-400">kcal</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wide">
+                        kcal
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-blue-600">
+                    <div className="flex flex-col items-center py-2.5">
+                      <p className="text-base font-bold text-blue-600">
                         {Math.floor(w.duration_seconds / 60)}:
                         {String(w.duration_seconds % 60).padStart(2, "0")}
                       </p>
-                      <p className="text-[10px] text-gray-400">time</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wide">
+                        Time
+                      </p>
                     </div>
                   </div>
                 </div>
               ))}
+
+              {/* Day totals footer */}
+              {selectedWorkouts.length > 1 && (
+                <div className="mt-1 px-3 py-2.5 bg-white/70 rounded-xl border border-indigo-100 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Day Total
+                  </p>
+                  <div className="flex gap-4">
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-indigo-600">
+                        {selectedWorkouts.reduce((s, w) => s + w.repCount, 0)}
+                      </p>
+                      <p className="text-[10px] text-gray-400">reps</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-green-600">
+                        {Math.round(
+                          selectedWorkouts.reduce(
+                            (s, w) => s + w.caloriesBurned,
+                            0,
+                          ),
+                        )}
+                      </p>
+                      <p className="text-[10px] text-gray-400">kcal</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -268,52 +306,47 @@ function WorkoutCalendar({ workoutMap, allWorkouts }) {
   );
 }
 
-// ── Helper: load & validate profile from localStorage ──────────────────────────
-function loadSavedProfile() {
-  try {
-    const saved = localStorage.getItem("userProfile");
-    if (!saved) return null;
-    const parsed = JSON.parse(saved);
-    // Wipe stale profiles saved with old pre-filled defaults
-    const stale =
-      parsed.gender === "male" ||
-      parsed.diet === "vegetarian" ||
-      parsed.experience === "intermediate" ||
-      parsed.fitnessGoal === "lose_weight";
-    if (stale) {
-      localStorage.removeItem("userProfile");
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-const emptyProfile = {
-  firstName: "",
-  lastName: "",
-  age: "",
-  gender: "",
-  height: "",
-  weight: "",
-  targetWeight: "",
-  diet: "",
-  experience: "",
-  fitnessGoal: "",
-};
-
 export default function ProfilePage({ onSave, onBack, token }) {
-  const savedProfile = loadSavedProfile();
-
-  // isEditing is true ONLY when there is no saved profile yet (first visit).
-  // Subsequent renders always start in view mode.
-  const [profile, setProfile] = useState(savedProfile ?? emptyProfile);
-  const [isEditing, setIsEditing] = useState(!savedProfile);
+  const [profile, setProfile] = useState(null); // null = loading, false = not found, object = loaded
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState(emptyProfile);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
+  // Fetch profile from DB every time the page is opened
+  useEffect(() => {
+    if (!token) {
+      setLoadingProfile(false);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data);
+          setFormData(data);
+          setIsEditing(false); // profile exists — go straight to view
+        } else if (res.status === 404) {
+          setProfile(false);
+          setFormData(emptyProfile);
+          setIsEditing(true); // first visit — show form
+        }
+      } catch {
+        setProfile(false);
+        setIsEditing(true);
+      } finally {
+        setLoadingProfile(false);
+      }
+    })();
+  }, [token]);
+
+  // Fetch workouts
   useEffect(() => {
     if (!token) {
       setLoadingWorkouts(false);
@@ -341,38 +374,55 @@ export default function ProfilePage({ onSave, onBack, token }) {
     return acc;
   }, {});
 
-  const workoutDateSet = new Set(Object.keys(workoutMap));
-  const streak = computeStreak(workoutDateSet);
+  const streak = computeStreak(new Set(Object.keys(workoutMap)));
   const totalReps = workouts.reduce((s, w) => s + w.repCount, 0);
   const totalCalories = workouts.reduce((s, w) => s + w.caloriesBurned, 0);
   const totalSessions = workouts.length;
 
   const bmi = (() => {
-    if (!profile.height || !profile.weight) return "—";
+    if (!profile?.height || !profile?.weight) return "—";
     const h = profile.height / 100;
     return (profile.weight / (h * h)).toFixed(1);
   })();
   const bmiCategory = getBMICategory(bmi);
-
   const weightProgress =
-    profile.weight && profile.targetWeight
+    profile?.weight && profile?.targetWeight
       ? (parseFloat(profile.weight) - parseFloat(profile.targetWeight)).toFixed(
           1,
         )
       : null;
 
   const handleChange = (e) =>
-    setProfile({ ...profile, [e.target.name]: e.target.value });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    localStorage.setItem("userProfile", JSON.stringify(profile));
-    setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
-      setIsEditing(false);
-    }, 1500);
-    if (onSave) onSave(profile);
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/profile`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        const { profile: saved } = await res.json();
+        setProfile(saved);
+        setFormData(saved);
+        setIsSaved(true);
+        setTimeout(() => {
+          setIsSaved(false);
+          setIsEditing(false);
+        }, 1500);
+        if (onSave) onSave(saved);
+      }
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const inputClass =
@@ -380,14 +430,24 @@ export default function ProfilePage({ onSave, onBack, token }) {
   const labelClass =
     "text-sm font-medium text-gray-600 flex items-center gap-2 mb-1.5";
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-gray-500 text-sm">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   const renderViewMode = () => (
     <div className="space-y-5">
-      {/* Profile header */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex justify-between items-start mb-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-md">
-              {profile.firstName ? (
+              {profile?.firstName ? (
                 profile.firstName[0].toUpperCase()
               ) : (
                 <User className="w-7 h-7" />
@@ -395,37 +455,39 @@ export default function ProfilePage({ onSave, onBack, token }) {
             </div>
             <div>
               <h3 className="text-xl font-bold text-gray-900">
-                {profile.firstName || "Your"} {profile.lastName || "Profile"}
+                {profile?.firstName || "Your"} {profile?.lastName || "Profile"}
               </h3>
               <p className="text-sm text-gray-500 capitalize">
-                {profile.experience} · {profile.fitnessGoal?.replace("_", " ")}
+                {profile?.experience} ·{" "}
+                {profile?.fitnessGoal?.replace("_", " ")}
               </p>
             </div>
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              setFormData(profile);
+              setIsEditing(true);
+            }}
           >
             <Edit2 className="w-4 h-4 mr-1.5 inline" /> Edit
           </Button>
         </div>
-
-        {/* Body stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
-            { label: "Age", value: profile.age || "—" },
+            { label: "Age", value: profile?.age || "—" },
             {
               label: "Height",
-              value: profile.height ? `${profile.height}cm` : "—",
+              value: profile?.height ? `${profile.height}cm` : "—",
             },
             {
               label: "Weight",
-              value: profile.weight ? `${profile.weight}kg` : "—",
+              value: profile?.weight ? `${profile.weight}kg` : "—",
             },
             {
               label: "Goal Weight",
-              value: profile.targetWeight ? `${profile.targetWeight}kg` : "—",
+              value: profile?.targetWeight ? `${profile.targetWeight}kg` : "—",
             },
           ].map(({ label, value }) => (
             <div key={label} className="text-center p-3 bg-gray-50 rounded-xl">
@@ -434,8 +496,6 @@ export default function ProfilePage({ onSave, onBack, token }) {
             </div>
           ))}
         </div>
-
-        {/* BMI */}
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 flex items-center justify-between border border-indigo-100">
           <div>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">
@@ -455,21 +515,19 @@ export default function ProfilePage({ onSave, onBack, token }) {
             )}
           </div>
         </div>
-
         <div className="mt-3 flex gap-2 flex-wrap text-xs text-gray-500">
-          <span className="bg-gray-100 px-2.5 py-1 rounded-full capitalize">
-            {profile.gender}
-          </span>
-          <span className="bg-gray-100 px-2.5 py-1 rounded-full capitalize">
-            {profile.diet}
-          </span>
-          <span className="bg-gray-100 px-2.5 py-1 rounded-full capitalize">
-            {profile.experience}
-          </span>
+          {[profile?.gender, profile?.diet, profile?.experience]
+            .filter(Boolean)
+            .map((tag) => (
+              <span
+                key={tag}
+                className="bg-gray-100 px-2.5 py-1 rounded-full capitalize"
+              >
+                {tag}
+              </span>
+            ))}
         </div>
       </div>
-
-      {/* Activity stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
           icon={<Flame className="w-4 h-4 text-orange-500" />}
@@ -500,8 +558,6 @@ export default function ProfilePage({ onSave, onBack, token }) {
           accent="bg-green-50 border-green-100"
         />
       </div>
-
-      {/* Calendar */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         {loadingWorkouts ? (
           <div className="text-center text-gray-400 py-8 text-sm">
@@ -516,10 +572,15 @@ export default function ProfilePage({ onSave, onBack, token }) {
 
   const renderEditMode = () => (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h3 className="text-lg font-bold text-gray-900 mb-6">
-        {loadSavedProfile() ? "Edit Profile" : "Complete Your Profile"}
+      <h3 className="text-lg font-bold text-gray-900 mb-1">
+        {profile ? "Edit Profile" : "Complete Your Profile"}
       </h3>
-      <form onSubmit={handleSubmit} className="space-y-5">
+      {!profile && (
+        <p className="text-sm text-gray-400 mb-4">
+          Fill in your details to personalise your experience.
+        </p>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-5 mt-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>
@@ -528,7 +589,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             <input
               type="text"
               name="firstName"
-              value={profile.firstName}
+              value={formData.firstName}
               onChange={handleChange}
               className={inputClass}
               placeholder="e.g. Alex"
@@ -541,7 +602,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             <input
               type="text"
               name="lastName"
-              value={profile.lastName}
+              value={formData.lastName}
               onChange={handleChange}
               className={inputClass}
               placeholder="e.g. Smith"
@@ -556,7 +617,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             <input
               type="number"
               name="age"
-              value={profile.age}
+              value={formData.age}
               onChange={handleChange}
               className={inputClass}
               placeholder="25"
@@ -571,7 +632,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             </label>
             <select
               name="gender"
-              value={profile.gender}
+              value={formData.gender}
               onChange={handleChange}
               className={inputClass}
             >
@@ -590,7 +651,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             <input
               type="number"
               name="height"
-              value={profile.height}
+              value={formData.height}
               onChange={handleChange}
               className={inputClass}
               placeholder="170"
@@ -605,7 +666,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
               type="number"
               step="0.1"
               name="weight"
-              value={profile.weight}
+              value={formData.weight}
               onChange={handleChange}
               className={inputClass}
               placeholder="70"
@@ -621,7 +682,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
             type="number"
             step="0.1"
             name="targetWeight"
-            value={profile.targetWeight}
+            value={formData.targetWeight}
             onChange={handleChange}
             className={inputClass}
             placeholder="65"
@@ -634,7 +695,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
           </label>
           <select
             name="diet"
-            value={profile.diet}
+            value={formData.diet}
             onChange={handleChange}
             className={inputClass}
           >
@@ -652,7 +713,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
           </label>
           <select
             name="experience"
-            value={profile.experience}
+            value={formData.experience}
             onChange={handleChange}
             className={inputClass}
           >
@@ -668,7 +729,7 @@ export default function ProfilePage({ onSave, onBack, token }) {
           </label>
           <select
             name="fitnessGoal"
-            value={profile.fitnessGoal}
+            value={formData.fitnessGoal}
             onChange={handleChange}
             className={inputClass}
           >
@@ -680,10 +741,8 @@ export default function ProfilePage({ onSave, onBack, token }) {
             <option value="improve_flexibility">Improve Flexibility</option>
           </select>
         </div>
-
         <div className="flex gap-3 pt-2">
-          {/* Only show Cancel if there's an existing profile to go back to */}
-          {loadSavedProfile() && (
+          {profile && (
             <Button
               type="button"
               variant="outline"
@@ -695,11 +754,18 @@ export default function ProfilePage({ onSave, onBack, token }) {
           )}
           <button
             type="submit"
-            className={`flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-300 ${isSaved ? "bg-green-500 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+            disabled={isSaving}
+            className={`flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-300 disabled:opacity-60
+              ${isSaved ? "bg-green-500 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
           >
             {isSaved ? (
               <>
                 <CheckCircle className="w-4 h-4" /> Saved!
+              </>
+            ) : isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{" "}
+                Saving...
               </>
             ) : (
               <>

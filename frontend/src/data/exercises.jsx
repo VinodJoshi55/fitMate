@@ -8,7 +8,7 @@ export const exercises = [
     icon: <Target className="w-6 h-6" />,
     description: "Strengthen your legs and glutes",
     difficulty: "Beginner",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/42bFodPahBU",
     caloriesPerRep: 0.32,
     debounceTime: 500,
     instructions: [
@@ -23,7 +23,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Build upper body strength",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/TGQi4VsPIhU",
     caloriesPerRep: 0.3,
     debounceTime: 500,
     instructions: [
@@ -38,7 +38,7 @@ export const exercises = [
     icon: <Zap className="w-6 h-6" />,
     description: "Full body cardio workout",
     difficulty: "Beginner",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/2W4ZNSwoW_4",
     caloriesPerRep: 0.2,
     debounceTime: 300,
     instructions: [
@@ -53,7 +53,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Tone your arms",
     difficulty: "Beginner",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/CxM4wKfus_Y",
     caloriesPerRep: 0.15,
     debounceTime: 400,
     instructions: [
@@ -68,7 +68,7 @@ export const exercises = [
     icon: <Zap className="w-6 h-6" />,
     description: "Boost your heart rate",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/Cmxr9xcNhgU",
     caloriesPerRep: 0.25,
     debounceTime: 200,
     instructions: [
@@ -83,7 +83,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Strengthen your legs and core",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/1J8mVmtyYpk",
     caloriesPerRep: 0.4,
     debounceTime: 600,
     instructions: [
@@ -98,7 +98,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Core stability hold",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/Fcbw82ykBvY",
     caloriesPerRep: 0,
     debounceTime: 1000,
     instructions: [
@@ -113,7 +113,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Target your lower abs",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/dGKbTKLnym4",
     caloriesPerRep: 0.2,
     debounceTime: 600,
     instructions: [
@@ -128,7 +128,7 @@ export const exercises = [
     icon: <Activity className="w-6 h-6" />,
     description: "Build shoulder strength",
     difficulty: "Intermediate",
-    videoUrl: "https://www.youtube.com/embed/U3HlEF_E9fo",
+    videoUrl: "https://www.youtube.com/embed/pNa0_QN2eUg",
     caloriesPerRep: 0.3,
     debounceTime: 500,
     instructions: [
