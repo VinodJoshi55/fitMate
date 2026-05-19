@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, X, Minus } from "lucide-react";
+import { Send, X } from "lucide-react";
 
 // ── Lightweight markdown renderer ─────────────────────────────────────────────
 // Handles: **bold**, *italic*, bullet lists (- / *), numbered lists, blank-line paragraphs
-function MarkdownMessage({ text }) {
-  const lines = text.split("\n");
+function MarkdownMessage({ text = "" }) {
+  // Safe string check to prevent any undefined/null type crashes
+  const safeText = typeof text === "string" ? text : "";
+  const lines = safeText.split("\n");
   const elements = [];
   let i = 0;
 
@@ -69,8 +71,8 @@ function MarkdownMessage({ text }) {
 
 // Converts **bold** and *italic* inline
 function inlineFormat(text) {
+  if (typeof text !== "string") return text;
   const parts = [];
-  // Split on **bold** and *italic* tokens
   const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
   let last = 0;
   let match;
@@ -119,6 +121,7 @@ export default function Chatbot({ token }) {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
+
     try {
       const response = await fetch("http://localhost:3001/api/chat", {
         method: "POST",
@@ -128,14 +131,26 @@ export default function Chatbot({ token }) {
         },
         body: JSON.stringify({ message: userMsg.text }),
       });
+
+      // Crucial Fix: Fetch does not automatically throw errors on status 4xx/5xx
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: "bot", text: data.reply }]);
-    } catch {
+
+      if (data && data.reply) {
+        setMessages((prev) => [...prev, { role: "bot", text: data.reply }]);
+      } else {
+        throw new Error("Malformed response data");
+      }
+    } catch (error) {
+      console.error("Chatbot Error:", error);
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: "Sorry, I'm having trouble connecting. Please try again.",
+          text: "Sorry, I'm having trouble connecting or authorizing. Please try again.",
         },
       ]);
     } finally {

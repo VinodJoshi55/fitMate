@@ -8,7 +8,7 @@ import {
   CheckCircle,
   AlertCircle,
   Video,
-  X
+  X,
 } from "lucide-react";
 import { exercises } from "../data/exercises";
 import { calculateAngle, checkVisibility } from "../utils/poseUtils";
@@ -27,6 +27,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     repCount: 0,
     caloriesBurned: 0,
     workoutTime: "00:00",
+    plankHoldTime: 0,
   });
   const [feedbackMessage, setFeedbackMessage] = useState(
     "Position yourself in camera view",
@@ -41,6 +42,9 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   const workoutIntervalRef = useRef(null);
   const lastRepTimeRef = useRef(0);
   const lastLegRaisedRef = useRef(null);
+  const plankHoldingRef = useRef(false);
+  const plankTimerRef = useRef(null);
+  const plankHoldStartRef = useRef(null);
 
   const getInitialState = (id) =>
     id === "squats" || id === "pushups" || id === "lunges" ? "up" : "down";
@@ -173,85 +177,192 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
             try {
               switch (exerciseId) {
                 case "bicepcurls": {
-                  if (!checkVisibility(landmarks, [11, 13, 15])) break;
-                  const angle = calculateAngle(
-                    landmarks[11],
-                    landmarks[13],
-                    landmarks[15],
+                  // Track both arms; use the arm more visible to the camera
+                  const leftVis = Math.min(
+                    landmarks[11]?.visibility ?? 0,
+                    landmarks[13]?.visibility ?? 0,
+                    landmarks[15]?.visibility ?? 0,
                   );
-                  if (angle > 160 && exerciseStateRef.current === "up") {
+                  const rightVis = Math.min(
+                    landmarks[12]?.visibility ?? 0,
+                    landmarks[14]?.visibility ?? 0,
+                    landmarks[16]?.visibility ?? 0,
+                  );
+                  if (leftVis < 0.6 && rightVis < 0.6) break;
+
+                  // Pick the more-visible arm
+                  const [sh, el, wr] =
+                    leftVis >= rightVis
+                      ? [landmarks[11], landmarks[13], landmarks[15]]
+                      : [landmarks[12], landmarks[14], landmarks[16]];
+
+                  const angle = calculateAngle(sh, el, wr);
+
+                  // Must fully extend (> 155°) to reset state — prevents
+                  // counting partial movements at the top
+                  if (angle > 155 && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
-                    incrementRep();
-                    setFeedbackMessage("Lower with control");
+                    setFeedbackMessage("Good — now curl up!");
                   } else if (
-                    angle < 50 &&
+                    angle < 45 &&
                     exerciseStateRef.current === "down"
                   ) {
+                    // Full curl achieved — count it
                     exerciseStateRef.current = "up";
-                    setFeedbackMessage("Great curl!");
+                    incrementRep();
+                    setFeedbackMessage("Great curl! Lower with control.");
+                  } else if (angle >= 45 && angle <= 155) {
+                    setFeedbackMessage(
+                      exerciseStateRef.current === "down"
+                        ? "Curl higher!"
+                        : "Lower fully before next rep.",
+                    );
                   }
                   break;
                 }
+
                 case "squats": {
-                  if (!checkVisibility(landmarks, [23, 25, 27])) break;
-                  const angle = calculateAngle(
+                  // Need hips + knees + ankles all visible; also check torso upright
+                  if (
+                    !checkVisibility(landmarks, [23, 24, 25, 26, 27, 28], 0.6)
+                  )
+                    break;
+
+                  const leftKneeAngle = calculateAngle(
                     landmarks[23],
                     landmarks[25],
                     landmarks[27],
                   );
-                  if (angle > 170 && exerciseStateRef.current === "down") {
+                  const rightKneeAngle = calculateAngle(
+                    landmarks[24],
+                    landmarks[26],
+                    landmarks[28],
+                  );
+                  const avgKnee = (leftKneeAngle + rightKneeAngle) / 2;
+
+                  // Torso uprightness: shoulder Y should be well above hip Y
+                  const shoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+                  const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+                  const torsoUpright = shoulderY < hipY - 0.05; // shoulders above hips
+
+                  if (!torsoUpright) {
+                    setFeedbackMessage("Keep your chest up!");
+                    setPostureStatus("warning");
+                    break;
+                  }
+
+                  if (avgKnee > 165 && exerciseStateRef.current === "down") {
+                    // Standing back up — count the rep
                     exerciseStateRef.current = "up";
                     incrementRep();
+                    setPostureStatus("good");
                     setFeedbackMessage("Good rep! Ready for the next.");
-                  } else if (angle < 90 && exerciseStateRef.current === "up") {
+                  } else if (
+                    avgKnee < 100 &&
+                    exerciseStateRef.current === "up"
+                  ) {
+                    // Deep enough squat
                     exerciseStateRef.current = "down";
-                    setFeedbackMessage("Lower your hips, keep back straight.");
+                    setFeedbackMessage("Drive through your heels!");
+                  } else if (
+                    avgKnee >= 100 &&
+                    avgKnee <= 140 &&
+                    exerciseStateRef.current === "up"
+                  ) {
+                    setFeedbackMessage("Go lower — aim for parallel!");
+                    setPostureStatus("warning");
+                  } else {
+                    setPostureStatus("good");
                   }
                   break;
                 }
+
                 case "pushups": {
-                  if (!checkVisibility(landmarks, [11, 13, 15, 12, 14, 16]))
+                  // Require full upper body + check body is roughly horizontal
+                  if (
+                    !checkVisibility(
+                      landmarks,
+                      [11, 12, 13, 14, 15, 16, 23, 24],
+                      0.6,
+                    )
+                  )
                     break;
-                  const leftAngle = calculateAngle(
+
+                  const leftElbow = calculateAngle(
                     landmarks[11],
                     landmarks[13],
                     landmarks[15],
                   );
-                  const rightAngle = calculateAngle(
+                  const rightElbow = calculateAngle(
                     landmarks[12],
                     landmarks[14],
                     landmarks[16],
                   );
-                  const avgAngle = (leftAngle + rightAngle) / 2;
+                  const avgElbow = (leftElbow + rightElbow) / 2;
 
-                  if (avgAngle < 90 && exerciseStateRef.current === "up") {
-                    exerciseStateRef.current = "down";
-                    setFeedbackMessage("Push up!");
+                  // Body line check: hips should be roughly level with shoulders
+                  // (not piked up or sagging). In normalised coords, Y increases downward.
+                  const shoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+                  const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+                  const hipOffset = Math.abs(hipY - shoulderY);
+                  const bodyFlat = hipOffset < 0.18; // hips within 18% of shoulder height
+
+                  if (!bodyFlat) {
+                    setFeedbackMessage(
+                      hipY < shoulderY - 0.05
+                        ? "Lower your hips — don't pike!"
+                        : "Raise your hips — don't sag!",
+                    );
+                    setPostureStatus("warning");
+                    break;
                   }
-                  if (avgAngle > 160 && exerciseStateRef.current === "down") {
+
+                  if (avgElbow < 85 && exerciseStateRef.current === "up") {
+                    // Chest near floor
+                    exerciseStateRef.current = "down";
+                    setFeedbackMessage("Push up — full extension!");
+                  } else if (
+                    avgElbow > 155 &&
+                    exerciseStateRef.current === "down"
+                  ) {
+                    // Arms fully extended — count rep
                     exerciseStateRef.current = "up";
                     incrementRep();
-                    setFeedbackMessage("Great rep!");
+                    setPostureStatus("good");
+                    setFeedbackMessage("Great rep! Lower with control.");
+                  } else {
+                    setPostureStatus("good");
                   }
                   break;
                 }
+
                 case "jumpingjacks": {
-                  if (!checkVisibility(landmarks, [11, 12, 23, 24, 15, 16, 0]))
+                  if (
+                    !checkVisibility(
+                      landmarks,
+                      [11, 12, 15, 16, 23, 24, 0],
+                      0.55,
+                    )
+                  )
                     break;
+
                   const leftWristY = landmarks[15].y;
                   const rightWristY = landmarks[16].y;
                   const noseY = landmarks[0].y;
                   const leftHipY = landmarks[23].y;
                   const rightHipY = landmarks[24].y;
 
+                  // Hands clearly above nose = arms are raised
                   const handsUp = leftWristY < noseY && rightWristY < noseY;
+                  // Hands clearly below hips = arms are down
                   const handsDown =
-                    leftWristY >= leftHipY - 0.1 &&
-                    rightWristY >= rightHipY - 0.1;
+                    leftWristY > leftHipY - 0.05 &&
+                    rightWristY > rightHipY - 0.05;
 
                   if (handsUp && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
-                    setFeedbackMessage("Great!");
+                    setPostureStatus("good");
+                    setFeedbackMessage("Great! Come back down.");
                   } else if (handsDown && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
                     incrementRep();
@@ -259,34 +370,42 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   }
                   break;
                 }
+
                 case "highknees": {
-                  if (!checkVisibility(landmarks, [23, 24, 25, 26])) break;
+                  if (!checkVisibility(landmarks, [23, 24, 25, 26], 0.55))
+                    break;
 
                   const leftHipY = landmarks[23].y;
                   const rightHipY = landmarks[24].y;
                   const leftKneeY = landmarks[25].y;
                   const rightKneeY = landmarks[26].y;
-                  const hipLevel = (leftHipY + rightHipY) / 2;
 
-                  if (
-                    leftKneeY < hipLevel - 0.05 &&
-                    lastLegRaisedRef.current !== "left"
-                  ) {
+                  // Knee must rise above its own hip — 0.07 is a reliable threshold
+                  // that avoids normal-walk sway but doesn't require exaggerated height
+                  const leftKneeHigh = leftKneeY < leftHipY - 0.07;
+                  const rightKneeHigh = rightKneeY < rightHipY - 0.07;
+
+                  if (leftKneeHigh && lastLegRaisedRef.current !== "left") {
                     incrementRep();
                     lastLegRaisedRef.current = "left";
+                    setPostureStatus("good");
                     setFeedbackMessage("Left knee high!");
                   } else if (
-                    rightKneeY < hipLevel - 0.05 &&
+                    rightKneeHigh &&
                     lastLegRaisedRef.current !== "right"
                   ) {
                     incrementRep();
                     lastLegRaisedRef.current = "right";
+                    setPostureStatus("good");
                     setFeedbackMessage("Right knee high!");
                   }
                   break;
                 }
+
                 case "lunges": {
-                  if (!checkVisibility(landmarks, [23, 25, 27, 24, 26, 28]))
+                  if (
+                    !checkVisibility(landmarks, [23, 24, 25, 26, 27, 28], 0.6)
+                  )
                     break;
 
                   const leftKneeAngle = calculateAngle(
@@ -300,60 +419,94 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                     landmarks[28],
                   );
 
-                  // Track the leg that is bending the most
+                  // The stepping leg bends most; front knee angle < back knee angle
                   const minAngle = Math.min(leftKneeAngle, rightKneeAngle);
+                  const maxAngle = Math.max(leftKneeAngle, rightKneeAngle);
 
-                  if (minAngle > 160 && exerciseStateRef.current === "down") {
-                    exerciseStateRef.current = "up";
-                    incrementRep();
-                    setFeedbackMessage("Great lunge! Switch legs.");
-                  } else if (
-                    minAngle < 100 &&
+                  // Valid lunge: front knee ≈ 90° AND back knee also bent (< 150°)
+                  // This prevents counting a single knee bend while standing still
+                  const validLungeDepth = minAngle < 105 && maxAngle < 155;
+
+                  // Torso upright: shoulders above hips
+                  const shoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+                  const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+                  const torsoUpright = shoulderY < hipY - 0.03;
+
+                  if (
+                    validLungeDepth &&
+                    torsoUpright &&
                     exerciseStateRef.current === "up"
                   ) {
                     exerciseStateRef.current = "down";
-                    setFeedbackMessage("Push back up.");
+                    setFeedbackMessage("Good depth! Push back up.");
+                  } else if (
+                    minAngle > 160 &&
+                    exerciseStateRef.current === "down"
+                  ) {
+                    exerciseStateRef.current = "up";
+                    incrementRep();
+                    setPostureStatus("good");
+                    setFeedbackMessage("Great lunge! Switch legs.");
+                  } else if (minAngle < 105 && !torsoUpright) {
+                    setFeedbackMessage("Keep your torso upright!");
+                    setPostureStatus("warning");
+                  } else if (minAngle < 105 && maxAngle >= 155) {
+                    setFeedbackMessage("Step out further!");
+                    setPostureStatus("warning");
                   }
                   break;
                 }
 
                 case "legraises": {
-                  if (!checkVisibility(landmarks, [11, 23, 27, 12, 24, 28]))
+                  // For lying leg raises, track ankle Y relative to hip Y.
+                  // When lying flat, ankles are at roughly the same Y as hips.
+                  // Raised legs bring ankles above hip level (lower Y value).
+                  if (!checkVisibility(landmarks, [23, 24, 27, 28], 0.55))
                     break;
 
-                  // Calculate hip angle using shoulder, hip, and ankle
-                  const leftHipAngle = calculateAngle(
-                    landmarks[11],
-                    landmarks[23],
-                    landmarks[27],
-                  );
-                  const rightHipAngle = calculateAngle(
-                    landmarks[12],
-                    landmarks[24],
-                    landmarks[28],
-                  );
-                  const avgHipAngle = (leftHipAngle + rightHipAngle) / 2;
+                  const leftHipY = landmarks[23].y;
+                  const rightHipY = landmarks[24].y;
+                  const leftAnkleY = landmarks[27].y;
+                  const rightAnkleY = landmarks[28].y;
+                  const avgHipY = (leftHipY + rightHipY) / 2;
+                  const avgAnkleY = (leftAnkleY + rightAnkleY) / 2;
 
-                  if (
-                    avgHipAngle < 120 &&
-                    exerciseStateRef.current === "down"
-                  ) {
+                  // Legs fully raised: ankles clearly above hips (ankleY << hipY)
+                  const legsUp = avgAnkleY < avgHipY - 0.15;
+                  // Legs fully lowered: ankles at or below hip level
+                  const legsDown = avgAnkleY > avgHipY - 0.03;
+
+                  if (legsUp && exerciseStateRef.current === "down") {
                     exerciseStateRef.current = "up";
-                    setFeedbackMessage("Lower legs slowly.");
-                  } else if (
-                    avgHipAngle > 160 &&
-                    exerciseStateRef.current === "up"
-                  ) {
+                    setPostureStatus("good");
+                    setFeedbackMessage("Lower slowly — don't touch the floor!");
+                  } else if (legsDown && exerciseStateRef.current === "up") {
                     exerciseStateRef.current = "down";
                     incrementRep();
-                    setFeedbackMessage("Great rep!");
+                    setFeedbackMessage("Great rep! Raise again.");
+                  } else if (!legsUp && exerciseStateRef.current === "down") {
+                    setFeedbackMessage("Raise your legs higher!");
                   }
                   break;
                 }
 
                 case "plank": {
-                  if (!checkVisibility(landmarks, [11, 23, 27, 12, 24, 28]))
+                  if (
+                    !checkVisibility(landmarks, [11, 12, 23, 24, 27, 28], 0.55)
+                  ) {
+                    if (plankHoldingRef.current) {
+                      plankHoldingRef.current = false;
+                      if (plankTimerRef.current) {
+                        clearInterval(plankTimerRef.current);
+                        plankTimerRef.current = null;
+                      }
+                      setFeedbackMessage(
+                        "Can't see you — get back in position!",
+                      );
+                      setPostureStatus("warning");
+                    }
                     break;
+                  }
 
                   const leftBodyAngle = calculateAngle(
                     landmarks[11],
@@ -367,49 +520,94 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                   );
                   const avgBodyAngle = (leftBodyAngle + rightBodyAngle) / 2;
 
-                  if (avgBodyAngle > 160) {
+                  // A good plank body line is > 150°. Using both sides averaged
+                  // gives stability against one-side noise.
+                  const inPlankPosition = avgBodyAngle > 150;
+
+                  const plankFeedback =
+                    avgBodyAngle <= 150
+                      ? "Straighten your body — hips up!"
+                      : "Great posture! Hold it.";
+
+                  if (inPlankPosition && !plankHoldingRef.current) {
+                    plankHoldingRef.current = true;
+                    plankHoldStartRef.current = Date.now();
+                    plankTimerRef.current = setInterval(() => {
+                      // ~3.5 cal/min = 0.0583 cal/sec
+                      setStats((prev) => ({
+                        ...prev,
+                        plankHoldTime: prev.plankHoldTime + 1,
+                        caloriesBurned: prev.caloriesBurned + 0.0583,
+                      }));
+                    }, 1000);
                     setFeedbackMessage("Great posture! Hold it.");
+                    setPostureStatus("good");
+                  } else if (!inPlankPosition && plankHoldingRef.current) {
+                    plankHoldingRef.current = false;
+                    if (plankTimerRef.current) {
+                      clearInterval(plankTimerRef.current);
+                      plankTimerRef.current = null;
+                    }
+                    setFeedbackMessage(plankFeedback);
+                    setPostureStatus("warning");
+                  } else if (inPlankPosition) {
+                    setFeedbackMessage("Great posture! Hold it.");
+                    setPostureStatus("good");
                   } else {
-                    setFeedbackMessage("Keep your back straight!");
+                    setFeedbackMessage(plankFeedback);
+                    setPostureStatus("warning");
                   }
                   break;
                 }
 
                 case "shoulderpress": {
-                  if (!checkVisibility(landmarks, [11, 13, 15, 12, 14, 16]))
+                  if (
+                    !checkVisibility(landmarks, [11, 12, 13, 14, 15, 16], 0.6)
+                  )
                     break;
 
-                  const leftAngle = calculateAngle(
+                  const leftElbow = calculateAngle(
                     landmarks[11],
                     landmarks[13],
                     landmarks[15],
                   );
-                  const rightAngle = calculateAngle(
+                  const rightElbow = calculateAngle(
                     landmarks[12],
                     landmarks[14],
                     landmarks[16],
                   );
-                  const avgAngle = (leftAngle + rightAngle) / 2;
+                  const avgElbow = (leftElbow + rightElbow) / 2;
+
+                  // Wrists must be above elbows in the start position
+                  const wristsAboveElbows =
+                    landmarks[15].y < landmarks[13].y &&
+                    landmarks[16].y < landmarks[14].y;
+                  // Full press: arms nearly straight AND wrists above shoulders
                   const wristsAboveShoulders =
-                    landmarks[15].y < landmarks[11].y &&
-                    landmarks[16].y < landmarks[12].y;
+                    landmarks[15].y < landmarks[11].y - 0.02 &&
+                    landmarks[16].y < landmarks[12].y - 0.02;
 
                   if (
-                    avgAngle > 150 &&
+                    avgElbow > 155 &&
                     wristsAboveShoulders &&
                     exerciseStateRef.current === "down"
                   ) {
+                    // Full press reached
                     exerciseStateRef.current = "up";
                     incrementRep();
+                    setPostureStatus("good");
                     setFeedbackMessage("Great press! Lower slowly.");
-                  }
-            
-                  else if (
-                    avgAngle < 100 &&
+                  } else if (
+                    avgElbow < 95 &&
+                    wristsAboveElbows &&
                     exerciseStateRef.current === "up"
                   ) {
+                    // Arms back to start position
                     exerciseStateRef.current = "down";
-                    setFeedbackMessage("Push up!");
+                    setFeedbackMessage("Press up — full extension!");
+                  } else if (avgElbow > 155 && !wristsAboveShoulders) {
+                    setFeedbackMessage("Raise your arms higher!");
+                    setPostureStatus("warning");
                   }
                   break;
                 }
@@ -439,7 +637,11 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
           await camera.start();
           if (isMounted) {
             setIsReady(true);
-            setFeedbackMessage('Ready! Press "Play" to begin.');
+            setFeedbackMessage(
+              exerciseId === "plank"
+                ? 'Press "Play", then get into plank — the timer starts automatically!'
+                : 'Ready! Press "Play" to begin.',
+            );
           }
         } catch (err) {
           console.error("Failed to start camera", err);
@@ -452,6 +654,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
     return () => {
       isMounted = false;
       if (workoutIntervalRef.current) clearInterval(workoutIntervalRef.current);
+      if (plankTimerRef.current) clearInterval(plankTimerRef.current);
       if (cameraRef.current) {
         cameraRef.current.stop();
         cameraRef.current = null;
@@ -471,6 +674,14 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
       // Pause immediately
       setIsActive(false);
       setCountDown(0); // Clear any active countdown
+      // Also stop plank hold timer if running
+      if (exerciseId === "plank" && plankHoldingRef.current) {
+        plankHoldingRef.current = false;
+        if (plankTimerRef.current) {
+          clearInterval(plankTimerRef.current);
+          plankTimerRef.current = null;
+        }
+      }
       setFeedbackMessage("Workout paused.");
     } else {
       // Start Countdown (Logic handled in useEffect)
@@ -481,17 +692,36 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
   const handleReset = () => {
     setIsActive(false);
     setCountDown(0);
-    setStats({ repCount: 0, caloriesBurned: 0, workoutTime: "00:00" });
+    setStats({
+      repCount: 0,
+      caloriesBurned: 0,
+      workoutTime: "00:00",
+      plankHoldTime: 0,
+    });
     exerciseStateRef.current = getInitialState(exerciseId);
     lastLegRaisedRef.current = null;
+    plankHoldingRef.current = false;
+    if (plankTimerRef.current) {
+      clearInterval(plankTimerRef.current);
+      plankTimerRef.current = null;
+    }
     setFeedbackMessage("Stats reset. Ready to go again!");
   };
 
   const handleEndSession = async () => {
     setIsActive(false);
     setCountDown(0);
+    // Stop plank timer if still running
+    if (plankTimerRef.current) {
+      clearInterval(plankTimerRef.current);
+      plankTimerRef.current = null;
+    }
+    plankHoldingRef.current = false;
 
-    if (stats.repCount > 0) {
+    const isPlank = exerciseId === "plank";
+    const hasActivity = isPlank ? stats.plankHoldTime > 0 : stats.repCount > 0;
+
+    if (hasActivity) {
       try {
         const response = await fetch("http://localhost:3001/api/workouts", {
           method: "POST",
@@ -501,7 +731,7 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
           },
           body: JSON.stringify({
             exerciseName: exercise.name,
-            repCount: stats.repCount,
+            repCount: isPlank ? stats.plankHoldTime : stats.repCount,
             caloriesBurned: Math.round(stats.caloriesBurned),
             workoutTime: stats.workoutTime,
           }),
@@ -645,9 +875,18 @@ export default function WorkoutSession({ exerciseId, onBack, token }) {
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="text-center p-3 sm:p-4 bg-indigo-50 rounded-lg">
                     <div className="text-2xl sm:text-3xl font-bold text-indigo-600 mb-1">
-                      {stats.repCount}
+                      {exerciseId === "plank"
+                        ? `${Math.floor(stats.plankHoldTime / 60)
+                            .toString()
+                            .padStart(
+                              2,
+                              "0",
+                            )}:${(stats.plankHoldTime % 60).toString().padStart(2, "0")}`
+                        : stats.repCount}
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-600">Reps</div>
+                    <div className="text-xs sm:text-sm text-gray-600">
+                      {exerciseId === "plank" ? "Hold Time" : "Reps"}
+                    </div>
                   </div>
                   <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg">
                     <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-1">

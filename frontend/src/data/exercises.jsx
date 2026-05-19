@@ -10,7 +10,7 @@ export const exercises = [
     difficulty: "Beginner",
     videoUrl: "https://www.youtube.com/embed/42bFodPahBU",
     caloriesPerRep: 0.32,
-    debounceTime: 500,
+    debounceTime: 800,
     instructions: [
       "Keep your chest up and back straight.",
       "Lower your hips until thighs are parallel to the floor.",
@@ -25,7 +25,7 @@ export const exercises = [
     difficulty: "Intermediate",
     videoUrl: "https://www.youtube.com/embed/TGQi4VsPIhU",
     caloriesPerRep: 0.3,
-    debounceTime: 500,
+    debounceTime: 700,
     instructions: [
       "Keep your body in a straight line from head to heels.",
       "Lower your chest towards the floor, elbows at 45 degrees.",
@@ -40,7 +40,7 @@ export const exercises = [
     difficulty: "Beginner",
     videoUrl: "https://www.youtube.com/embed/2W4ZNSwoW_4",
     caloriesPerRep: 0.2,
-    debounceTime: 300,
+    debounceTime: 500,
     instructions: [
       "Start with feet together and arms at your sides.",
       "Jump, spreading feet wide while raising arms overhead.",
@@ -55,7 +55,7 @@ export const exercises = [
     difficulty: "Beginner",
     videoUrl: "https://www.youtube.com/embed/CxM4wKfus_Y",
     caloriesPerRep: 0.15,
-    debounceTime: 400,
+    debounceTime: 600,
     instructions: [
       "Keep your elbows locked at your sides.",
       "Curl the weight up to your shoulders without swinging.",
@@ -70,7 +70,7 @@ export const exercises = [
     difficulty: "Intermediate",
     videoUrl: "https://www.youtube.com/embed/Cmxr9xcNhgU",
     caloriesPerRep: 0.25,
-    debounceTime: 200,
+    debounceTime: 400,
     instructions: [
       "Run in place, bringing your knees up to hip height.",
       "Keep your core engaged and chest up.",
@@ -85,7 +85,7 @@ export const exercises = [
     difficulty: "Intermediate",
     videoUrl: "https://www.youtube.com/embed/1J8mVmtyYpk",
     caloriesPerRep: 0.4,
-    debounceTime: 600,
+    debounceTime: 800,
     instructions: [
       "Stand straight with feet hip-width apart.",
       "Take a step forward and lower your hips until both knees are bent at a 90-degree angle.",
@@ -105,6 +105,7 @@ export const exercises = [
       "Place forearms on the floor, elbows below shoulders.",
       "Extend legs back, resting on your toes.",
       "Keep your body in a straight line from head to heels.",
+      "The timer starts automatically when you hold the position and stops when you break it.",
     ],
   },
   {
@@ -115,7 +116,7 @@ export const exercises = [
     difficulty: "Intermediate",
     videoUrl: "https://www.youtube.com/embed/dGKbTKLnym4",
     caloriesPerRep: 0.2,
-    debounceTime: 600,
+    debounceTime: 800,
     instructions: [
       "Lie flat on your back with legs straight.",
       "Lift your legs until they form a 90-degree angle with your torso.",

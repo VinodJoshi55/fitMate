@@ -8,8 +8,8 @@ export function calculateAngle(a, b, c) {
   return angle;
 }
 
-export function checkVisibility(landmarks, indices, threshold = 0.5) {
+export function checkVisibility(landmarks, indices, threshold = 0.6) {
   return indices.every(
-    (idx) => landmarks[idx] && landmarks[idx].visibility > threshold
+    (idx) => landmarks[idx] && landmarks[idx].visibility > threshold,
   );
 }
